@@ -99,7 +99,7 @@ function worldCard(world, index, onRemove) {
                 onchange: e => { world.color = e.target.value; save(); },
             }));
 
-        card.replaceChildren(
+        card.replaceChildren(...[
             h('div.rf-world-head', {},
                 swatch,
                 h('span.rf-world-num', {}, `채팅 ${index + 1}`),
@@ -117,7 +117,8 @@ function worldCard(world, index, onRemove) {
                 h('summary', {}, '페르소나 · 요약'),
                 field('페르소나', personaPicker),
                 field('요약', summarySelect)) : null,
-            world.file ? info : null);
+            world.file ? info : null,
+        ].filter(Boolean)); // replaceChildren would print "null" for skipped parts
         inspect();
     };
 
