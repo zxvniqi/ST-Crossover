@@ -6,6 +6,7 @@ import { resolvePersona } from './persona.js';
 import { findSummaries, pickSummary } from './summaries.js';
 import { collectLore } from './lore.js';
 import { worldColor } from './highlight.js';
+import { worldInclude } from './settings.js';
 
 /** The model appends a name map after this line; it is parsed for highlights and removed from the episode. */
 export const NAME_MAP_MARKER = '[[NAMES]]';
@@ -113,6 +114,7 @@ export async function collectWorld(world, index) {
             index,
             worldId: world.id,
             label,
+            include: worldInclude(world),
             color: worldColor(world, index),
             cast,
             setting,
@@ -135,9 +137,10 @@ export async function collectWorld(world, index) {
 function assignAliases(worlds) {
     const count = new Map();
     const bump = name => count.set(name, (count.get(name) || 0) + 1);
+    // Only people who actually appear can be confused with each other.
     for (const w of worlds) {
-        w.cast.forEach(c => bump(c.name));
-        bump(w.persona.name);
+        if (w.include.bot) w.cast.forEach(c => bump(c.name));
+        if (w.include.user) bump(w.persona.name);
     }
     const alias = (name, w) => (count.get(name) > 1 ? `${name} (${w.label})` : name);
     for (const w of worlds) {
@@ -159,13 +162,21 @@ function worldBlock(w, n) {
         ? `### ${w.persona.name} (the user's character in this world)`
         : `### ${w.persona.alias} — the user's character in this world (a separate version of "${w.persona.name}")`;
 
+    // Partial crossovers: people who stay home are named as background only (no card, saves tokens).
+    const people = w.cast.filter(c => !c.isSetting);
+    const staying = [
+        ...(w.include.bot ? [] : people.map(c => c.name)),
+        ...(w.include.user ? [] : [`${w.persona.name} (the user's character)`]),
+    ];
+
     return [
         `=== WORLD ${n}: "${w.label}" ===`,
         overview.length || w.setting ? `## World setting\n${[...overview, demote(w.setting)].filter(Boolean).join('\n\n')}` : '',
-        '## Characters',
-        castLines.join('\n\n'),
-        personaHead,
-        demote(w.persona.description),
+        '## Appearing in this story',
+        w.include.bot ? castLines.join('\n\n') : '',
+        w.include.user ? personaHead : '',
+        w.include.user ? demote(w.persona.description) : '',
+        staying.length ? `## Not appearing (background only)\n${staying.join(', ')}` : '',
         w.summary ? `## Story so far (summary)\n${demote(w.summary.text)}` : '',
         w.recent ? `## Most recent scenes (chat log, oldest first)\n${w.recent}` : '',
         `=== END OF WORLD ${n} ===`,
@@ -196,6 +207,10 @@ export function buildPrompt(collected, topic, story) {
         'Keep every character true to their own world: personality, speech style, relationships and what they know.',
         'Characters only know what happened in their own world unless the episode shows them learning it.',
         'The user\'s characters are written as full characters in the story, consistent with their logs.',
+        worlds.some(w => !w.include.bot || !w.include.user)
+            ? 'Only the people listed under "Appearing in this story" take part. People listed as not appearing stay in their own world: '
+              + 'they may be remembered or mentioned, but never appear, speak or act. The summaries and chat logs are background for the appearing people.'
+            : '',
         'This is a side story. Do not continue or change any world\'s canon, and do not resolve its open plotlines.',
         'Headings below are labels for you, possibly in another language. In the prose, write every name the way it is naturally written in the language you write in.',
         'Never write world names, labels or tags in brackets next to a name, and do not use 「」 brackets.',

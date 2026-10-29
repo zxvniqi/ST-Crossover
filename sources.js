@@ -203,6 +203,16 @@ export async function getLoreEntries(char) {
     };
 }
 
+/** The chat open right now as a world source, or null when no chat is open. */
+export function openChatSource() {
+    const c = ctx();
+    const file = typeof c.getCurrentChatId === 'function' ? c.getCurrentChatId() : c.chatId;
+    if (!file) return null;
+    if (c.groupId) return { kind: 'group', groupId: String(c.groupId), avatar: '', file: String(file) };
+    const char = c.characterId !== undefined ? c.characters?.[c.characterId] : null;
+    return char ? { kind: 'char', avatar: char.avatar, groupId: '', file: String(file) } : null;
+}
+
 /** Thumbnail URL for a character avatar (small, cached by ST). */
 export function avatarUrl(avatar) {
     if (!avatar) return '';

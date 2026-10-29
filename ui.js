@@ -3,8 +3,8 @@
 
 import { ctx, log, formatDate, EXT_NAME } from './util.js';
 import { h, icon, searchSelect } from './dom.js';
-import { getSettings, getDraft, getStory, newWorld, save, saveSet, loadSet, deleteSet, MAX_WORLDS } from './settings.js';
-import { clearCache, worldDisplayName, worldAvatar, listChats } from './sources.js';
+import { getSettings, getDraft, getStory, newWorld, save, saveSet, loadSet, deleteSet, worldInclude, MAX_WORLDS } from './settings.js';
+import { clearCache, worldDisplayName, worldAvatar, listChats, openChatSource } from './sources.js';
 import { listPersonas } from './persona.js';
 import { collectWorld } from './prompt.js';
 import { worldColor, hexToRgba } from './highlight.js';
@@ -45,6 +45,13 @@ function worldCard(world, index, onRemove) {
             render();
             chooseChat();
         }
+        function useOpenChat() {
+            const source = openChatSource();
+            if (!source) return toastr.info('지금 열린 채팅이 없어요.');
+            Object.assign(world, source, { summary: 'auto', members: null });
+            save();
+            render();
+        }
         async function chooseChat() {
             const file = await pickChat(world);
             if (!file) return;
@@ -58,6 +65,23 @@ function worldCard(world, index, onRemove) {
             h('div.rf-who-text', {},
                 h('div.rf-who-name', {}, hasSource ? worldDisplayName(world) : '봇 고르기'),
                 hasSource ? chatLine : h('div.rf-muted', {}, '눌러서 캐릭터나 그룹을 골라요')));
+
+        // Who from this chat appears: both, only the bot, or only the user (at least one).
+        const include = worldInclude(world);
+        const appear = h('div.rf-appear', {},
+            h('span.rf-label', {}, '등장'),
+            ...[['bot', '봇'], ['user', '유저']].map(([key, label]) => h('button', {
+                type: 'button',
+                className: `rf-chip${include[key] ? ' rf-on' : ''}`,
+                title: include[key] ? `${label} 빼기` : `${label} 넣기`,
+                onclick: () => {
+                    const next = { ...include, [key]: !include[key] };
+                    if (!next.bot && !next.user) return toastr.info('봇이나 유저 중 하나는 등장해야 해요.');
+                    world.include = next;
+                    save();
+                    render();
+                },
+            }, include[key] ? icon('check') : null, label)));
 
         const personaPicker = searchSelect({
             options: [{ value: '', label: '자동 감지' }, ...listPersonas().map(p => ({ value: p.avatar, label: p.name }))],
@@ -112,7 +136,10 @@ function worldCard(world, index, onRemove) {
                 }),
                 h('button.rf-icon', { type: 'button', title: '이 채팅 빼기', onclick: onRemove }, icon('xmark'))),
             who,
-            hasSource ? button('다른 채팅 고르기', { iconName: 'comments', onclick: chooseChat }) : null,
+            h('div.rf-row.rf-wrap', {},
+                hasSource ? button('다른 채팅 고르기', { iconName: 'comments', onclick: chooseChat }) : null,
+                button('지금 열린 채팅', { iconName: 'location-crosshairs', onclick: useOpenChat, title: '지금 보고 있는 채팅을 이 칸에 넣어요' })),
+            world.file ? appear : null,
             world.file ? h('details.rf-details', {},
                 h('summary', {}, '페르소나 · 요약'),
                 field('페르소나', personaPicker),
@@ -254,10 +281,13 @@ export function openSettings() {
 
 /* ---------- topic prompt: ST's own input popup + two corner buttons ---------- */
 
-/** "대전쟁AU × 루시안" — alias, else the bot name. */
+/** "대전쟁AU(봇) × 루시안(봇·유저)" — alias, else the bot name, plus who appears. */
 function draftSummary() {
     const worlds = getDraft().worlds.filter(w => w.file);
-    return worlds.map(w => w.label?.trim() || worldDisplayName(w)).join(' × ');
+    return worlds.map(w => {
+        const { bot, user } = worldInclude(w);
+        return `${w.label?.trim() || worldDisplayName(w)}(${[bot && '봇', user && '유저'].filter(Boolean).join('·')})`;
+    }).join(' × ');
 }
 
 export async function openPrompt() {

@@ -36,10 +36,18 @@ export function getStory() {
 /**
  * World slot shape:
  * { id, kind: 'char'|'group', avatar, groupId, file, label, persona: ''|avatarKey, summary: 'auto'|'none'|sourceId,
- *   members: null (auto) | string[] (lorebook entry ids), color: '' (default per slot) | hex }
+ *   members: null (auto) | string[] (lorebook entry ids), color: '' (default per slot) | hex,
+ *   include: { bot: boolean, user: boolean } — who from this chat appears in the story }
  */
 export function newWorld() {
-    return { id: uid(), kind: 'char', avatar: '', groupId: '', file: '', label: '', persona: '', summary: 'auto', members: null, color: '' };
+    return { id: uid(), kind: 'char', avatar: '', groupId: '', file: '', label: '', persona: '', summary: 'auto', members: null, color: '', include: { bot: true, user: true } };
+}
+
+/** Who appears from a world; older saves have no `include`, and "nobody" is not allowed. */
+export function worldInclude(world) {
+    const bot = world?.include?.bot !== false;
+    const user = world?.include?.user !== false;
+    return bot || user ? { bot, user } : { bot: true, user: true };
 }
 
 function cloneWorlds(worlds) {
