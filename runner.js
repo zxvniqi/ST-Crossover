@@ -2,8 +2,8 @@
 
 import { ctx, log, MAX_WORLDS } from './util.js';
 import { collectWorld, buildPrompt } from './prompt.js';
-import { addEpisode } from './archive.js';
 import { buildMarks } from './highlight.js';
+import { assertChatOpen, insertIntoChat } from './chat-insert.js';
 
 let running = false;
 let cancelled = false;
@@ -41,10 +41,12 @@ export async function prepare(set, topic, options) {
 }
 
 /**
- * @returns {Promise<{ text: string, episode: object, failed: object[] } | null>} null when cancelled
+ * Generates the episode and puts it into the open chat as a hidden message.
+ * @returns {Promise<{ text: string, failed: object[] } | null>} null when cancelled
  */
 export async function runCrossover(set, topic, options, onStatus = () => {}) {
     if (running) throw new Error('이미 생성 중이에요.');
+    assertChatOpen();
     running = true;
     cancelled = false;
     try {
@@ -58,20 +60,13 @@ export async function runCrossover(set, topic, options, onStatus = () => {}) {
         if (cancelled) return null;
         if (!text) throw new Error('모델이 빈 응답을 보냈어요. API 연결과 응답 길이 설정을 확인해 주세요.');
 
-        let marks = [];
-        try {
-            marks = await buildMarks(built.worlds);
-        } catch (err) {
-            log.warn('highlight colors failed', err); // cosmetic; never blocks saving
-        }
-        const episode = await addEpisode({
-            topic,
-            setName: set.name,
-            worlds: built.worlds.map(w => w.label),
-            marks,
+        await insertIntoChat({
             text,
+            topic,
+            worlds: built.worlds.map(w => w.label),
+            marks: buildMarks(built.worlds),
         });
-        return { text, episode, failed: built.failed };
+        return { text, failed: built.failed };
     } finally {
         running = false;
     }

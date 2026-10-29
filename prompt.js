@@ -5,6 +5,7 @@ import { loadChat, worldCharacters, worldDisplayName } from './sources.js';
 import { resolvePersona } from './persona.js';
 import { findSummaries, pickSummary } from './summaries.js';
 import { collectLore } from './lore.js';
+import { worldColor } from './highlight.js';
 
 const LENGTH_HINT = {
     short: 'about 600 words',
@@ -101,6 +102,7 @@ export async function collectWorld(world, index, options) {
             index,
             worldId: world.id,
             label,
+            color: worldColor(world, index),
             cast,
             setting,
             loreCandidates: lore.candidates,

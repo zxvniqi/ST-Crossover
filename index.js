@@ -7,6 +7,7 @@ import { h, icon } from './dom.js';
 import { openCrossover } from './ui.js';
 import { runCrossover } from './runner.js';
 import { clearCache } from './sources.js';
+import { highlightChat } from './chat-insert.js';
 
 const WAND_ID = 'xo_wand_button';
 const DRAWER_ID = 'xo_settings_drawer';
@@ -50,10 +51,9 @@ function addSettingsDrawer() {
                 h('b', {}, '크로스오버 에피소드'),
                 h('div.inline-drawer-icon.fa-solid.fa-circle-chevron-down.down')),
             h('div.inline-drawer-content', {},
-                h('p.xo-muted', {}, '마법봉 메뉴 → "크로스오버 에피소드" 또는 /crossover 주제'),
+                h('p.xo-muted', {}, '마법봉 메뉴 → "크로스오버 에피소드" 또는 /crossover 주제. 결과는 열린 채팅에 숨김 메시지로 들어가요.'),
                 h('div.flex-container', {},
-                    h('button.menu_button', { type: 'button', onclick: () => openCrossover() }, icon('shuffle'), ' 열기'),
-                    h('button.menu_button', { type: 'button', onclick: () => openCrossover('archive') }, icon('box-archive'), ' 보관함')),
+                    h('button.menu_button', { type: 'button', onclick: () => openCrossover() }, icon('shuffle'), ' 열기')),
                 h('label.checkbox_label', {}, debug, h('span', {}, '디버그 로그 (F12 콘솔)')),
             ),
         ),
@@ -66,7 +66,7 @@ function registerCommand() {
     SlashCommandParser.addCommandObject(SlashCommand.fromProps({
         name: 'crossover',
         returns: 'the generated episode text',
-        helpString: '<div>선택한 세트로 크로스오버 에피소드를 생성해 보관함에 저장하고 본문을 반환합니다. 인자 없이 쓰면 창을 엽니다.</div>'
+        helpString: '<div>선택한 세트로 크로스오버 에피소드를 생성해 열린 채팅에 숨김 메시지로 넣고 본문을 반환합니다. 인자 없이 쓰면 창을 엽니다.</div>'
             + '<div>예: <code>/crossover 두 사람이 같은 카페에서 마주친다</code>, <code>/crossover set="세트 2" 비 오는 날</code></div>',
         namedArgumentList: [
             SlashCommandNamedArgument.fromProps({ name: 'set', description: '세트 이름 (생략하면 현재 세트)', typeList: [ARGUMENT_TYPE.STRING] }),
@@ -91,7 +91,7 @@ function registerCommand() {
             try {
                 const result = await runCrossover(set, topic, settings.options);
                 if (!result) return '';
-                toastr.success('크로스오버 에피소드를 보관함에 저장했어요.');
+                toastr.success('채팅에 숨김 메시지로 넣었어요.');
                 return result.text;
             } catch (err) {
                 log.error(err);
@@ -131,6 +131,8 @@ function init() {
         addSettingsDrawer();
         registerCommand();
         registerDebug();
+        // The archive was removed in 0.2.0; drop its leftover storage.
+        SillyTavern.libs?.localforage?.removeItem('crossover_episodes_archive').catch(() => {});
         log.info('loaded');
     } catch (err) {
         log.error('init failed', err);
@@ -142,4 +144,11 @@ eventSource.on(event_types.APP_READY, init);
 // Loaded late (e.g. enabled after startup): the app is already up when the preloader is gone.
 if (document.getElementById('extensionsMenu') && !document.getElementById('preloader')) init();
 // The chat we just left may have new messages on disk; drop cached copies so the next read is fresh.
-eventSource.on(event_types.CHAT_CHANGED, () => clearCache());
+eventSource.on(event_types.CHAT_CHANGED, () => {
+    clearCache();
+    highlightChat();
+});
+// Messages get re-rendered on load, edit, swipe and translation; paint the highlights again each time.
+for (const name of ['MORE_MESSAGES_LOADED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED', 'MESSAGE_SWIPED', 'CHARACTER_MESSAGE_RENDERED']) {
+    if (event_types[name]) eventSource.on(event_types[name], highlightChat);
+}

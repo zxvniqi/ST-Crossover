@@ -1,5 +1,5 @@
 // Persistent settings in extensionSettings. Only small data lives here;
-// generated episodes go to the archive (localforage).
+// generated episodes live in the chat they were put into.
 
 import { MODULE_NAME, uid, ctx } from './util.js';
 
@@ -23,17 +23,15 @@ const defaultSettings = Object.freeze({
     sets: [],
     options: defaultOptions,
     lastTopic: '',
-    colors: {},             // highlighter overrides: markKey -> hex
-    markNames: {},          // extra names to highlight: markKey -> string[]
 });
 
 /**
  * World slot shape:
  * { id, kind: 'char'|'group', avatar, groupId, file, label, persona: ''|avatarKey, summary: 'auto'|'none'|sourceId,
- *   members: null (auto) | string[] (lorebook entry ids) }
+ *   members: null (auto) | string[] (lorebook entry ids), color: '' (default per slot) | hex }
  */
 export function newWorld() {
-    return { id: uid(), kind: 'char', avatar: '', groupId: '', file: '', label: '', persona: '', summary: 'auto', members: null };
+    return { id: uid(), kind: 'char', avatar: '', groupId: '', file: '', label: '', persona: '', summary: 'auto', members: null, color: '' };
 }
 
 export function newSet(name) {

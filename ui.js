@@ -1,4 +1,4 @@
-// Main popup: compose tab + archive tab.
+// Main popup: pick worlds, write a topic, generate into the open chat.
 
 import { ctx, log, MAX_WORLDS, formatDate, uid } from './util.js';
 import { h, icon, searchSelect } from './dom.js';
@@ -6,9 +6,8 @@ import { getSettings, getActiveSet, newSet, newWorld, save } from './settings.js
 import { listCharacters, listGroups, listChats, clearCache, worldDisplayName } from './sources.js';
 import { listPersonas } from './persona.js';
 import { collectWorld } from './prompt.js';
+import { worldColor, hexToRgba } from './highlight.js';
 import { runCrossover, prepare, cancel, isRunning } from './runner.js';
-import { listEpisodes, removeEpisode } from './archive.js';
-import { episodeView } from './episode-view.js';
 
 const LENGTHS = [['short', '짧게'], ['medium', '보통'], ['long', '길게']];
 
@@ -180,8 +179,19 @@ function worldCard(world, index, onRemove) {
             fold.replaceChildren(icon(collapsed ? 'chevron-down' : 'chevron-up'));
         }
 
+        const paint = color => card.style.setProperty('--xo-world', hexToRgba(color, 0.55));
+        paint(worldColor(world, index));
+        const swatch = h('label.xo-swatch', { title: '이 세계의 형광펜 색' },
+            h('input', {
+                type: 'color',
+                value: worldColor(world, index),
+                oninput: e => paint(e.target.value),
+                onchange: e => { world.color = e.target.value; save(); },
+            }));
+
         card.replaceChildren(
             h('div.xo-world-head', {},
+                swatch,
                 h('span.xo-world-num', {}, `세계 ${index + 1}`),
                 h('input.text_pole.xo-label', {
                     type: 'text',
@@ -206,12 +216,11 @@ function worldCard(world, index, onRemove) {
 
 /* ---------- compose tab ---------- */
 
-function composeTab(onSaved) {
+function composePane(onDone) {
     const settings = getSettings();
     const pane = h('div.xo-pane');
     const worldsBox = h('div.xo-worlds');
     const status = h('div.xo-status');
-    const resultBox = h('div.xo-result', { hidden: true });
 
     const setSelect = h('select.text_pole.xo-select', {
         onchange: () => { settings.activeSetId = setSelect.value; save(); renderSet(); },
@@ -260,7 +269,7 @@ function composeTab(onSaved) {
             set.name = String(name).trim() || set.name;
         } else if (kind === 'delete') {
             if (settings.sets.length <= 1) return toastr.info('세트가 하나뿐이라 지울 수 없어요.');
-            if (!await Popup.show.confirm('세트 삭제', `"${set.name}" 세트를 지울까요? 보관함의 에피소드는 남아요.`)) return;
+            if (!await Popup.show.confirm('세트 삭제', `"${set.name}" 세트를 지울까요? 채팅에 넣은 에피소드는 남아요.`)) return;
             settings.sets = settings.sets.filter(s => s.id !== set.id);
             settings.activeSetId = settings.sets[0].id;
         }
@@ -349,29 +358,15 @@ function composeTab(onSaved) {
         try {
             const result = await runCrossover(getActiveSet(), topic.value, o, s => { status.textContent = s; });
             if (!result) return;
-            status.textContent = result.failed.length ? `⚠ 건너뛴 세계: ${result.failed.map(f => f.label).join(', ')}` : '';
-            showResult(result.episode);
-            onSaved();
+            if (result.failed.length) toastr.warning(`건너뛴 세계: ${result.failed.map(f => f.label).join(', ')}`);
+            toastr.success('채팅에 숨김 메시지로 넣었어요.');
+            onDone(); // close the popup so the new message is in view
         } catch (err) {
             log.error('generation failed', err);
             status.textContent = `⚠ ${err.message}`;
         } finally {
             setBusy(false);
         }
-    }
-
-    function showResult(episode) {
-        resultBox.hidden = false;
-        resultBox.replaceChildren(
-            h('div.xo-result-head', {},
-                h('b', {}, '결과'),
-                h('span.xo-muted', {}, '보관함에 저장됨 · 색 칩을 누르면 형광펜 색을 바꿀 수 있어요')),
-            episodeView(episode, {
-                onSaved,
-                extraButtons: [h('button.menu_button', { type: 'button', onclick: generate }, icon('rotate-right'), ' 다시 생성')],
-            }),
-        );
-        resultBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     fillSets();
@@ -390,85 +385,25 @@ function composeTab(onSaved) {
         addBtn,
         h('div.xo-field', {}, h('span', {}, '주제 / 보고 싶은 장면'), topic),
         optionsBox,
+        h('div.xo-muted', {}, '결과는 지금 열린 채팅에 숨김 메시지로 들어가요. 번역·테마는 적용되고, AI 맥락에는 들어가지 않아요.'),
         h('div.xo-row.xo-actions', {}, refreshBtn, previewBtn, stopBtn, genBtn),
         status,
-        resultBox,
     );
     return pane;
 }
 
-/* ---------- archive tab ---------- */
-
-function archiveTab() {
-    const pane = h('div.xo-pane');
-    const search = h('input.text_pole', { type: 'search', placeholder: '제목·주제·세계로 검색…' });
-    const list = h('div.xo-archive');
-    let items = [];
-
-    const draw = () => {
-        const q = search.value.trim().toLowerCase();
-        const shown = q
-            ? items.filter(x => [x.title, x.topic, x.setName, ...(x.worlds || [])].join(' ').toLowerCase().includes(q))
-            : items;
-        if (!shown.length) {
-            list.replaceChildren(h('div.xo-empty', {}, items.length ? '검색 결과가 없어요.' : '아직 저장된 에피소드가 없어요.'));
-            return;
-        }
-        list.replaceChildren(...shown.map(ep => h('details.xo-ep', {},
-            h('summary', {},
-                h('span.xo-ep-title', {}, ep.title),
-                h('span.xo-muted', {}, `${formatDate(ep.at)} · ${(ep.worlds || []).join(' × ')}`)),
-            ep.topic ? h('div.xo-muted.xo-ep-topic', {}, `주제: ${ep.topic}`) : null,
-            episodeView(ep, {
-                extraButtons: [h('button.menu_button.xo-danger', { type: 'button', onclick: async () => {
-                    if (!await ctx().Popup.show.confirm('삭제', `"${ep.title}"을(를) 지울까요?`)) return;
-                    await removeEpisode(ep.id);
-                    await reload();
-                } }, icon('trash-can'), ' 삭제')],
-            }),
-        )));
-    };
-
-    async function reload() {
-        items = await listEpisodes();
-        draw();
-        pane.dispatchEvent(new CustomEvent('xo-count', { detail: items.length }));
-    }
-
-    search.addEventListener('input', draw);
-    pane.append(search, list);
-    pane.reload = reload;
-    return pane;
-}
 
 /* ---------- popup ---------- */
 
-export async function openCrossover(startTab = 'compose') {
+export async function openCrossover() {
     const { Popup, POPUP_TYPE } = ctx();
-    const archive = archiveTab();
-    const compose = composeTab(() => archive.reload());
-
-    const tabBtn = (key, label) => h('button', { type: 'button', className: 'xo-tab', dataset: { tab: key } }, label);
-    const tabs = h('div.xo-tabs', {}, tabBtn('compose', '새 에피소드'), tabBtn('archive', '보관함'));
-    const show = key => {
-        compose.hidden = key !== 'compose';
-        archive.hidden = key !== 'archive';
-        tabs.querySelectorAll('.xo-tab').forEach(b => b.classList.toggle('xo-on', b.dataset.tab === key));
-        if (key === 'archive') archive.reload();
+    let popup = null;
+    const close = () => {
+        if (typeof popup?.completeAffirmative === 'function') popup.completeAffirmative();
+        else root.closest('dialog')?.querySelector('.popup-button-ok')?.click();
     };
-    tabs.addEventListener('click', e => {
-        const key = e.target.closest('.xo-tab')?.dataset.tab;
-        if (key) show(key);
-    });
-    archive.addEventListener('xo-count', e => {
-        tabs.querySelector('[data-tab="archive"]').textContent = `보관함 (${e.detail})`;
-    });
-
-    const root = h('div.xo-root', {}, tabs, compose, archive);
-    show(startTab);
-    archive.reload();
-
-    const popup = new Popup(root, POPUP_TYPE.TEXT, '', { wide: true, large: true, okButton: '닫기', allowVerticalScrolling: true });
+    const root = h('div.xo-root', {}, composePane(close));
+    popup = new Popup(root, POPUP_TYPE.TEXT, '', { wide: true, large: true, okButton: '닫기', allowVerticalScrolling: true });
     await popup.show();
-    if (isRunning()) toastr.info('창을 닫아도 생성은 계속돼요. 결과는 보관함에 저장됩니다.');
+    if (isRunning()) toastr.info('창을 닫아도 생성은 계속돼요. 끝나면 지금 열린 채팅에 들어가요.');
 }

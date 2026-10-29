@@ -1,50 +1,36 @@
-// Name highlighting for generated episodes ("형광펜").
+// Name highlighting ("형광펜"): one colour per world, so readers see at a glance
+// which chat each person comes from.
 
 import { h } from './dom.js';
-import { pickColors, hexToRgba } from './colors.js';
-import { getSettings } from './settings.js';
 
 const MIN_NAME_LENGTH = 2; // one-letter names would mark half the text
+export const WORLD_COLORS = ['#f6c344', '#7ec8e3', '#f28fad', '#9ad18b'];
 
-/**
- * One mark per person per world. Built after aliases are assigned (buildPrompt).
- * @returns {Promise<Array<{ key: string, label: string, world: string, names: string[], color: string }>>}
- */
-export async function buildMarks(worlds) {
-    const { colors: overrides = {}, markNames = {} } = getSettings();
-    const seen = new Map();
-    const people = [];
-    worlds.forEach(w => {
-        const entries = [
-            ...w.cast.filter(c => !c.isSetting).map(c => (c.loreId
-                ? { type: 'lore', file: c.loreId, name: c.name, alias: c.alias }
-                : { type: 'avatar', file: c.avatar, name: c.name, alias: c.alias })),
-            { type: 'persona', file: w.persona.avatar, name: w.persona.name, alias: w.persona.alias },
-        ];
-        for (const e of entries) {
-            const identity = `${e.type}|${e.file || e.name}`;
-            const occurrence = seen.get(identity) || 0;
-            seen.set(identity, occurrence + 1);
-            people.push({ ...e, key: `${w.worldId}|${identity}`, world: w.label, occurrence });
-        }
-    });
-
-    const colors = await pickColors(people);
-    // By default only the alias is marked: a plain name shared by several worlds could belong to any of them.
-    // Extra names (e.g. a Korean spelling, people inside a multi-character card) come from the user.
-    return people
-        .map(p => ({
-            key: p.key,
-            label: p.alias,
-            world: p.world,
-            names: [p.alias, ...(markNames[p.key] || [])],
-            color: overrides[p.key] || colors.get(p.key),
-        }))
-        .filter(m => m.label);
+export function worldColor(world, index) {
+    return world?.color || WORLD_COLORS[index % WORLD_COLORS.length];
 }
 
-export function parseNames(text) {
-    return [...new Set(String(text).split(/[,，、\n]/).map(s => s.trim()).filter(s => s.length >= MIN_NAME_LENGTH))];
+export function hexToRgba(hex, alpha) {
+    const n = parseInt(String(hex).replace('#', ''), 16);
+    if (Number.isNaN(n)) return `rgba(246, 195, 68, ${alpha})`;
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/**
+ * One mark per world with every person of that world. Built after aliases are assigned,
+ * so a name shared by two worlds is only marked through its world-tagged alias.
+ * @param {object[]} worlds collected worlds (buildPrompt output)
+ * @returns {{ world: string, color: string, names: string[] }[]}
+ */
+export function buildMarks(worlds) {
+    return worlds.map(w => ({
+        world: w.label,
+        color: w.color,
+        names: [...new Set([
+            ...w.cast.filter(c => !c.isSetting).map(c => c.alias),
+            w.persona.alias,
+        ])].filter(n => n && n.length >= MIN_NAME_LENGTH),
+    })).filter(m => m.names.length);
 }
 
 function escapeRegex(s) {
@@ -82,18 +68,4 @@ export function applyHighlights(root, marks = []) {
         parts.push(text.slice(last));
         node.replaceWith(...parts);
     }
-}
-
-/** Color chips; clicking one opens a color picker. onChange(key, hex) persists and re-renders. */
-export function legend(marks, onChange) {
-    if (!marks?.length) return null;
-    return h('div.xo-legend', {}, ...marks.map(m => {
-        const input = h('input.xo-color', {
-            type: 'color',
-            value: m.color,
-            title: '색 바꾸기',
-            onchange: e => onChange(m.key, e.target.value),
-        });
-        return h('label.xo-chip', { title: m.world }, input, h('span', { style: `--xo-hl: ${hexToRgba(m.color, 0.55)}` }, m.label));
-    }));
 }
