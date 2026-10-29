@@ -161,6 +161,11 @@ textarea.rf-input { resize: vertical; }
 .rf-who-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rf-info { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--rf-muted); }
 
+.rf-story { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; background: var(--rf-panel); border: 1px solid var(--rf-line); border-radius: 12px; }
+.rf-story .rf-label { margin-right: 4px; font-weight: 600; }
+.rf-num { width: 64px; padding: 5px 6px; text-align: center; }
+.rf-sep { color: var(--rf-muted); margin: 0 2px; }
+
 .rf-swatch {
     position: relative; flex-shrink: 0; width: 16px; height: 16px; margin: 0 2px; cursor: pointer;
     border-radius: 50%; background: var(--rf-world); box-shadow: 0 0 0 1px var(--rf-line);

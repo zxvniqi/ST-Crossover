@@ -4,7 +4,7 @@ import { ctx, log } from './util.js';
 import { collectWorld, buildPrompt, NAME_MAP_MARKER } from './prompt.js';
 import { assemble } from './preset.js';
 import { parseEpisode } from './highlight.js';
-import { MAX_WORLDS } from './settings.js';
+import { MAX_WORLDS, getStory } from './settings.js';
 import { assertChatOpen, insertIntoChat } from './chat-insert.js';
 
 let running = false;
@@ -46,7 +46,7 @@ export async function prepare(set, topic) {
     const worlds = usableWorlds(set);
     if (worlds.length < 2) throw new Error('채팅을 2개 이상 선택해 주세요.');
     const collected = await Promise.all(worlds.map((w, i) => collectWorld(w, i)));
-    const built = buildPrompt(collected, topic);
+    const built = buildPrompt(collected, topic, getStory());
     if (built.worlds.length < 2) {
         const why = built.failed.map(f => `${f.label}: ${f.error}`).join('\n');
         throw new Error(`불러온 채팅이 2개보다 적어요.\n${why}`);

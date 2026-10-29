@@ -3,7 +3,7 @@
 
 import { ctx, log, formatDate, EXT_NAME } from './util.js';
 import { h, icon, searchSelect } from './dom.js';
-import { getSettings, getDraft, newWorld, save, saveSet, loadSet, deleteSet, MAX_WORLDS } from './settings.js';
+import { getSettings, getDraft, getStory, newWorld, save, saveSet, loadSet, deleteSet, MAX_WORLDS } from './settings.js';
 import { clearCache, worldDisplayName, worldAvatar, listChats } from './sources.js';
 import { listPersonas } from './persona.js';
 import { collectWorld } from './prompt.js';
@@ -219,6 +219,18 @@ export function openSettings() {
 
     renderWorlds();
 
+    // Length of the story: episode count range and words per episode (sent to the model as-is).
+    const story = settings.story;
+    const num = (key, min, max, step = 1) => h('input.rf-input.rf-num', {
+        type: 'number', min, max, step, value: getStory()[key],
+        onchange: e => { story[key] = Number(e.target.value); save(); e.target.value = getStory()[key]; },
+    });
+    const storyRow = h('div.rf-story', {},
+        h('span.rf-label', {}, '분량'),
+        h('span', {}, '에피소드'), num('episodesMin', 1, 20), h('span', {}, '~'), num('episodesMax', 1, 20), h('span', {}, '개'),
+        h('span.rf-sep', {}, '·'),
+        h('span', {}, '각'), num('wordsPerEpisode', 50, 5000, 50), h('span', {}, '단어 이상'));
+
     return openModal({
         title: `${EXT_NAME} 설정`,
         width: '760px',
@@ -231,6 +243,7 @@ export function openSettings() {
                 h('button.rf-icon', { type: 'button', title: '세트 삭제', onclick: onDelete }, icon('trash-can'))),
             worldsBox,
             addBtn,
+            storyRow,
             status),
         actions: [
             button('새로고침', { iconName: 'rotate', title: '채팅을 다시 읽어와요', onclick: () => { clearCache(); renderWorlds(); } }),

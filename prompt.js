@@ -176,7 +176,7 @@ function worldBlock(w, n) {
  * Crossover-specific text only. Language, length and style come from the user's preset (preset.js).
  * @returns {{ parts: { system: string, material: string, request: string }, worlds: object[], failed: object[] }}
  */
-export function buildPrompt(collected, topic) {
+export function buildPrompt(collected, topic, story) {
     const worlds = collected.filter(w => w.ok);
     const failed = collected.filter(w => !w.ok);
     const shared = assignAliases(worlds);
@@ -190,8 +190,8 @@ export function buildPrompt(collected, topic) {
     const n = worlds.length;
 
     const system = [
-        '[Crossover episode] Instead of continuing a chat, write one standalone crossover episode.',
-        `The characters below come from ${n} separate stories ("worlds"). For this episode they meet in one shared scene.`,
+        '[Crossover side story] Temporarily pause the ongoing RP and write a self-contained crossover side story.',
+        `The characters below come from ${n} separate stories ("worlds"). In this side story their worlds collide and they meet.`,
         sameNote,
         'Keep every character true to their own world: personality, speech style, relationships and what they know.',
         'Characters only know what happened in their own world unless the episode shows them learning it.',
@@ -204,10 +204,29 @@ export function buildPrompt(collected, topic) {
     const request = [
         '=== EPISODE REQUEST ===',
         `What the user wants to see: ${topic.trim() || 'Surprise the reader with a fun, natural reason for these worlds to meet.'}`,
-        'Write the episode now: an optional short title on the first line, then the prose.',
-        `Name tags: every time you write the name of a person (a character from World 1 to World ${n}), wrap that name in <wN></wN>, `
-            + 'where N is the number of the world the person comes from, e.g. <w1>Name</w1>. '
-            + 'Tag only names of people; never tag places, titles, species, items or other words. The tags are hidden from the reader.',
+        '',
+        'Structure:',
+        story.episodesMin === story.episodesMax
+            ? `- Write the story as narrative prose, structured into ${story.episodesMin} episodes.`
+            : `- Write the story as narrative prose, structured into ${story.episodesMin} to ${story.episodesMax} episodes.`,
+        `- Each episode must be at least ${story.wordsPerEpisode} words.`,
+        '- The first episode must depict how the worlds collide and the people first meet.',
+        '- The later episodes may take place over hours, days or longer. Let the situation and the relationships between the worlds develop between episodes.',
+        '- Vary the situations, locations, conflicts and moods across episodes: daily life, comedy, trouble, tension, affection, disagreement and change where appropriate.',
+        '- Each episode must consist of multiple paragraphs. Something must happen and develop through actions, decisions, dialogue, complications and consequences; never a static explanation of the setting.',
+        '',
+        'Format:',
+        '- Begin with an original overall title in exactly this format: # Story Title',
+        '- Begin every episode exactly in this format: ###[ Episode 01 / Thematic Title💛 ] (change the number, the thematic title and the fitting emoji for each episode).',
+        '- Separate every episode with a horizontal rule (---).',
+        '- Output only the story. No explanations, notes, summaries, content warnings or code blocks.',
+        '',
+        'Name tags (required, the reader never sees them):',
+        `- Wrap EVERY occurrence of a person's name in <wN></wN>, where N (1 to ${n}) is the number of the world that person comes from.`,
+        '- This includes names inside dialogue, short forms and nicknames, and possessive or particle forms (tag only the name part).',
+        '- When two versions of the same person are present, each occurrence gets the number of the version it refers to.',
+        '- Tag people only. Never tag places, organisations, titles, species, items or other words, and never tag inside the story title or episode headings.',
+        '- Example: <w1>Alice</w1> handed the key to <w2>Alice</w2>. "Thanks, <w1>Al</w1>," said <w2>Alice</w2>.',
         reader
             ? `After the episode, add a line "${NAME_MAP_MARKER}" and then one line per tagged person: "wN: <name as you wrote it> = <how that name is usually written in ${reader}>".`
             : '',

@@ -18,7 +18,20 @@ const defaultSettings = Object.freeze({
     activeSetId: '', // the saved set the draft was loaded from ('' = unsaved)
     lastTopic: '',
     uiTheme: 'auto', // settings window: 'auto' | 'light' | 'dark'
+    story: { episodesMin: 6, episodesMax: 8, wordsPerEpisode: 400 }, // same defaults as the AU list QR
 });
+
+/** Episode count / length with sane bounds (inputs can hold anything). */
+export function getStory() {
+    const s = getSettings().story || {};
+    const clamp = (v, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || d));
+    const min = clamp(s.episodesMin, 1, 20, 6);
+    return {
+        episodesMin: min,
+        episodesMax: Math.max(min, clamp(s.episodesMax, 1, 20, 8)),
+        wordsPerEpisode: clamp(s.wordsPerEpisode, 50, 5000, 400),
+    };
+}
 
 /**
  * World slot shape:

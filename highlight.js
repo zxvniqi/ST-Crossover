@@ -43,20 +43,44 @@ export function parseEpisode(raw, worlds, marker) {
         body = body.slice(0, at);
     }
 
-    const order = new Map(); // tagged name → world indexes in reading order
-    const text = body.replace(TAG, (_, n, name) => {
-        const idx = Number(n) - 1;
-        const clean = name.trim();
-        if (clean && idx >= 0 && idx < worlds.length) {
-            if (!order.has(clean)) order.set(clean, []);
-            order.get(clean).push(idx);
-        }
-        return name;
-    }).replace(STRAY_TAG, '').trim();
+    // Strip the tags while remembering where each tagged name ends up in the clean text.
+    let text = '';
+    let last = 0;
+    const tagged = []; // { pos, name, idx }
+    for (const m of body.matchAll(TAG)) {
+        text += body.slice(last, m.index).replace(STRAY_TAG, '');
+        const idx = Number(m[1]) - 1;
+        const name = m[2].trim();
+        if (name && idx >= 0 && idx < worlds.length) tagged.push({ pos: text.length + m[2].indexOf(name), name, idx });
+        text += m[2];
+        last = m.index + m[0].length;
+    }
+    text += body.slice(last).replace(STRAY_TAG, '');
+    const lead = text.length - text.trimStart().length;
+    text = text.trim();
+    tagged.forEach(t => { t.pos -= lead; });
+
+    const worldsOf = new Map(); // name → set of world indexes it was tagged with
+    tagged.forEach(t => (worldsOf.get(t.name) || worldsOf.set(t.name, new Set()).get(t.name)).add(t.idx));
 
     const names = {};
-    for (const [name, seq] of order) {
-        names[name] = seq.every(i => i === seq[0]) ? seq[0] : seq;
+    for (const [name, set] of worldsOf) if (set.size === 1) names[name] = [...set][0];
+
+    // A spelling used by two worlds is coloured per occurrence. Occurrences the model forgot to tag
+    // take the world of the nearest tagged one, so a few missing tags no longer blank the whole name.
+    const ambiguous = [...worldsOf].filter(([, set]) => set.size > 1).map(([name]) => name);
+    if (ambiguous.length) {
+        const all = [...worldsOf.keys()].sort((a, b) => b.length - a.length); // longest first, like the renderer
+        const scan = new RegExp(all.map(escapeRegex).join('|'), 'g');
+        const at = new Map(tagged.map(t => [`${t.pos}|${t.name}`, t.idx]));
+        const seqs = new Map(ambiguous.map(n => [n, []]));
+        for (const m of text.matchAll(scan)) {
+            if (seqs.has(m[0])) seqs.get(m[0]).push(at.has(`${m.index}|${m[0]}`) ? at.get(`${m.index}|${m[0]}`) : null);
+        }
+        for (const [name, seq] of seqs) {
+            let known = seq.find(v => v !== null);
+            names[name] = seq.map(v => (v === null ? known : (known = v)));
+        }
     }
     for (const [spelling, idx] of extra) {
         if (idx >= 0 && !Object.hasOwn(names, spelling)) names[spelling] = idx;
