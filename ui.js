@@ -362,12 +362,26 @@ export function openPrompt() {
         }
     };
 
+    // The topic is kept between uses, so offer a one-click clear.
+    const clear = button('지우기', {
+        iconName: 'eraser',
+        title: '입력 내용 지우기',
+        onclick: () => {
+            topic.value = '';
+            settings.lastTopic = '';
+            save();
+            topic.focus();
+        },
+    });
+    clear.classList.add('rf-left');
+
     const m = openModal({
         title: '어떤 크로스오버를 볼까요?',
         headerExtra: gear,
         width: '520px',
         body: h('div.rf-stack', {}, topic, worldsLine),
         actions: [
+            clear,
             button('취소', { onclick: () => m.close(null) }),
             button('Ok', { primary: true, onclick: go }),
         ],

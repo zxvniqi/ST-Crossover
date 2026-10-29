@@ -12,7 +12,12 @@
     --rf-danger: #d14343;
     --rf-radius: 12px;
     position: fixed;
-    inset: 0;
+    /* Explicit size: some themes transform <html>, which makes `inset: 0` measure a tiny box. */
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
     z-index: 10050;
     display: flex;
     align-items: center;
@@ -89,6 +94,7 @@ textarea.rf-input { resize: vertical; }
 .rf-primary { color: var(--rf-accent-text); background: var(--rf-accent); border-color: var(--rf-accent); }
 .rf-primary:hover { filter: brightness(1.08); border-color: var(--rf-accent); }
 .rf-danger { color: var(--rf-danger); }
+.rf-actions .rf-left { margin-right: auto; }
 
 .rf-icon {
     display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
