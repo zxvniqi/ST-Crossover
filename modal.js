@@ -1,55 +1,73 @@
-// Self-styled modal dialogs (independent of the ST theme). Stackable; Esc / backdrop closes the top one.
+// Self-styled windows (independent of the ST theme), built on <dialog> so they sit in the browser's
+// top layer: centred on every screen, above ST's own popups, unaffected by theme transforms.
 
 import { h, icon } from './dom.js';
+import { getSettings, save } from './settings.js';
 
-const stack = [];
+/** 'light' | 'dark' — the user's choice for these windows, defaulting to the device setting. */
+function currentTheme() {
+    const saved = getSettings().uiTheme;
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 
-function onKey(e) {
-    const top = stack[stack.length - 1];
-    if (!top) return;
-    if (e.key === 'Escape') {
-        e.preventDefault();
-        top.close(null);
-    }
+function applyTheme(dialog) {
+    dialog.dataset.theme = currentTheme();
+}
+
+/** Header button that flips light/dark for every open window and remembers the choice. */
+function themeToggle() {
+    const btn = h('button.rf-icon', { type: 'button', title: '라이트/다크 전환' });
+    const paint = () => btn.replaceChildren(icon(currentTheme() === 'dark' ? 'sun' : 'moon'));
+    btn.addEventListener('click', () => {
+        getSettings().uiTheme = currentTheme() === 'dark' ? 'light' : 'dark';
+        save();
+        document.querySelectorAll('dialog.rf-dialog').forEach(applyTheme);
+        paint();
+    });
+    paint();
+    return btn;
 }
 
 /**
- * @param {{ title?: string, body: Node, actions?: Node[], headerExtra?: Node, width?: string }} cfg
- * @returns {{ close: (value?: any) => void, done: Promise<any>, root: HTMLElement }}
+ * @param {{ title?: string, body: Node, actions?: Node[], headerExtra?: Node, width?: string, themeButton?: boolean }} cfg
+ * @returns {{ close: (value?: any) => void, done: Promise<any>, root: HTMLDialogElement }}
  */
-export function openModal({ title = '', body, actions = [], headerExtra = null, width = '480px' }) {
+export function openModal({ title = '', body, actions = [], headerExtra = null, width = '480px', themeButton = false }) {
     let resolve;
     const done = new Promise(r => { resolve = r; });
-    const card = h('div.rf-card', { role: 'dialog', 'aria-modal': 'true', style: `--rf-width: ${width}` },
-        h('div.rf-head', {},
-            h('div.rf-title', {}, title),
-            headerExtra,
-            h('button.rf-icon', { type: 'button', title: '닫기', onclick: () => api.close(null) }, icon('xmark'))),
-        h('div.rf-body', {}, body),
-        actions.length ? h('div.rf-actions', {}, ...actions) : null);
-    const root = h('div.rf-overlay', { onmousedown: e => { if (e.target === root) api.close(null); } }, card);
+    const dialog = h('dialog.rf-dialog', { 'aria-label': title },
+        h('div.rf-card', { style: `--rf-width: ${width}` },
+            h('div.rf-head', {},
+                h('div.rf-title', {}, title),
+                headerExtra,
+                themeButton ? themeToggle() : null,
+                h('button.rf-icon', { type: 'button', title: '닫기', onclick: () => api.close(null) }, icon('xmark'))),
+            h('div.rf-body', {}, body),
+            actions.length ? h('div.rf-actions', {}, ...actions) : null));
+    applyTheme(dialog);
 
+    let closed = false;
     const api = {
-        root,
+        root: dialog,
         done,
         close(value) {
-            const i = stack.indexOf(api);
-            if (i < 0) return;
-            stack.splice(i, 1);
-            root.remove();
-            if (!stack.length) document.removeEventListener('keydown', onKey, true);
+            if (closed) return;
+            closed = true;
+            dialog.close();
+            dialog.remove();
             resolve(value);
         },
     };
-    if (!stack.length) document.addEventListener('keydown', onKey, true);
-    stack.push(api);
-    document.body.append(root);
+    dialog.addEventListener('cancel', e => { e.preventDefault(); api.close(null); }); // Esc
+    dialog.addEventListener('mousedown', e => { if (e.target === dialog) api.close(null); }); // backdrop
+    document.body.append(dialog);
+    dialog.showModal();
     return api;
 }
 
-export function button(label, { primary = false, danger = false, onclick, iconName = '', title = '' } = {}) {
-    const cls = ['button.rf-btn', primary && 'rf-primary', danger && 'rf-danger'].filter(Boolean).join('.');
-    return h(cls, { type: 'button', onclick, title }, iconName ? icon(iconName) : null, label);
+export function button(label, { primary = false, onclick, iconName = '', title = '' } = {}) {
+    return h(primary ? 'button.rf-btn.rf-primary' : 'button.rf-btn', { type: 'button', onclick, title }, iconName ? icon(iconName) : null, label);
 }
 
 /** Small text prompt in the same style. Resolves to the trimmed text, or null when cancelled. */

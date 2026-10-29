@@ -1,5 +1,5 @@
 // 크로스오버 — writes a crossover side story where characters from several chats meet.
-// Entry point: QR-bar button, wand-menu item, settings drawer and /crossover command.
+// Entry point: QR-bar button, settings drawer and /crossover command.
 
 import { ctx, log, setDebug, EXT_NAME } from './util.js';
 import { getSettings, getDraft, save } from './settings.js';
@@ -9,13 +9,12 @@ import { runCrossover } from './runner.js';
 import { clearCache } from './sources.js';
 import { highlightChat, watchChat } from './chat-insert.js';
 
-const WAND_ID = 'rf_wand_button';
 const QR_ID = 'rf_qr_button';
 const DRAWER_ID = 'rf_settings_drawer';
 
 /**
  * Keep one of our elements present inside a container that other code re-renders
- * (QR rebuilds its bar, some extensions rebuild the wand menu). Re-adds only when missing.
+ * (QR rebuilds its bar). Re-adds only when missing.
  */
 function keepPresent(watchRoot, id, attach) {
     const run = () => { if (!document.getElementById(id)) attach(); };
@@ -23,21 +22,10 @@ function keepPresent(watchRoot, id, attach) {
     if (watchRoot) new MutationObserver(run).observe(watchRoot, { childList: true, subtree: true });
 }
 
-function addWandButton() {
-    const menu = document.getElementById('extensionsMenu');
-    if (!menu) return;
-    menu.append(h('div.list-group-item.flex-container.flexGap5.interactable', {
-        id: WAND_ID,
-        tabIndex: 0,
-        title: '여러 채팅의 캐릭터가 만나는 크로스오버',
-        onclick: () => openPrompt(),
-    }, h('div.fa-solid.fa-shuffle.extensionsMenuExtensionButton'), h('span', {}, EXT_NAME)));
-}
-
 /** A button in front of the Quick Reply buttons above the input box, like a QR. */
 function addQrButton() {
     const bar = document.getElementById('qr--bar');
-    if (!bar) return; // QR disabled: the wand item still works
+    if (!bar) return; // QR disabled: the settings panel buttons and /crossover still work
     bar.prepend(h('div.qr--buttons', {},
         h('div.qr--button.menu_button.interactable', {
             id: QR_ID,
@@ -62,7 +50,7 @@ function addSettingsDrawer() {
                 h('b', {}, EXT_NAME),
                 h('div.inline-drawer-icon.fa-solid.fa-circle-chevron-down.down')),
             h('div.inline-drawer-content', {},
-                h('p', {}, '입력창 위 QR 바의 버튼(또는 마법봉 메뉴)으로 열어요. 결과는 열린 채팅에 숨김 메시지로 들어가요.'),
+                h('p', {}, '입력창 위 QR 바의 크로스오버 버튼으로 열어요. 결과는 열린 채팅에 숨김 메시지로 들어가요.'),
                 h('div.flex-container', {},
                     h('button.menu_button', { type: 'button', onclick: () => openPrompt() }, icon('pen'), ' 쓰기'),
                     h('button.menu_button', { type: 'button', onclick: () => openSettings() }, icon('gear'), ' 채팅 고르기')),
@@ -131,7 +119,6 @@ function init() {
     try {
         const settings = getSettings();
         setDebug(settings.debug);
-        keepPresent(document.getElementById('extensionsMenu'), WAND_ID, addWandButton);
         keepPresent(document.getElementById('send_form'), QR_ID, addQrButton);
         addSettingsDrawer();
         watchChat();
@@ -146,9 +133,9 @@ function init() {
 }
 
 const { eventSource, event_types } = ctx();
-// The wand menu and input form are static page markup and settings are loaded before extensions run,
+// The input form is static page markup and settings are loaded before extensions run,
 // so set up right away instead of waiting for the chat to finish loading (APP_READY).
-if (document.getElementById('extensionsMenu')) init();
+if (document.getElementById('send_form')) init();
 else eventSource.on(event_types.APP_INITIALIZED ?? event_types.APP_READY, init);
 // The chat we just left may have new messages on disk; drop cached copies so the next read is fresh.
 eventSource.on(event_types.CHAT_CHANGED, () => {

@@ -1,87 +1,86 @@
-/* 크로스오버 — self-styled windows (independent of the ST theme). Every rule is scoped under .rf-overlay,
-   except the name highlight, which lives inside chat messages and keeps the theme's text colour. */
+/* 크로스오버 — self-styled windows (independent of the ST theme), on <dialog> in the top layer.
+   Light/dark comes from data-theme (toggle in the window header). Outside the windows only two rules:
+   the corner buttons on ST's input popup and the name highlight inside chat messages. */
 
-.rf-overlay {
+dialog.rf-dialog {
     --rf-bg: #ffffff;
-    --rf-panel: #f6f7f9;
-    --rf-line: #e3e6eb;
+    --rf-panel: #f5f6f8;
+    --rf-hover: #eceef2;
+    --rf-line: #e2e5ea;
     --rf-text: #1f2328;
     --rf-muted: #6b7280;
     --rf-accent: #5b5bd6;
+    --rf-accent-soft: #ececfb;
     --rf-accent-text: #ffffff;
     --rf-danger: #d14343;
-    --rf-radius: 12px;
+    /* the dialog itself is just a full-screen centring layer */
     position: fixed;
-    /* Explicit size: some themes transform <html>, which makes `inset: 0` measure a tiny box. */
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100vw;
     height: 100vh;
     height: 100dvh;
-    z-index: 10050;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    max-width: none;
+    max-height: none;
+    margin: 0;
     padding: 16px;
-    background: rgba(15, 17, 21, 0.45);
+    border: none;
+    background: transparent;
     font-family: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
     font-size: 14px;
     line-height: 1.5;
     color: var(--rf-text);
+    text-shadow: none;
 }
-@media (prefers-color-scheme: dark) {
-    .rf-overlay {
-        --rf-bg: #1d1f24;
-        --rf-panel: #25282e;
-        --rf-line: #353941;
-        --rf-text: #e7e9ee;
-        --rf-muted: #9aa1ad;
-        --rf-accent: #8b8bf5;
-        --rf-accent-text: #14151a;
-    }
+dialog.rf-dialog[open] { display: flex; align-items: center; justify-content: center; }
+dialog.rf-dialog::backdrop { background: rgba(15, 17, 21, 0.5); }
+dialog.rf-dialog[data-theme="dark"] {
+    --rf-bg: #1c1e23;
+    --rf-panel: #24272d;
+    --rf-hover: #2d3138;
+    --rf-line: #343840;
+    --rf-text: #e8eaef;
+    --rf-muted: #9aa1ad;
+    --rf-accent: #8c8cf6;
+    --rf-accent-soft: #2c2c4a;
+    --rf-accent-text: #15161b;
 }
-.rf-overlay * { box-sizing: border-box; }
-.rf-overlay [hidden] { display: none !important; }
+.rf-dialog * { box-sizing: border-box; }
+.rf-dialog [hidden] { display: none !important; }
 
 .rf-card {
     width: min(var(--rf-width, 480px), 100%);
-    max-height: min(90vh, 900px);
+    max-height: min(88vh, 900px);
+    max-height: min(88dvh, 900px);
     display: flex;
     flex-direction: column;
     background: var(--rf-bg);
     border-radius: 16px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
     overflow: hidden;
 }
-.rf-head { display: flex; align-items: center; gap: 8px; padding: 16px 16px 8px 20px; }
+.rf-head { display: flex; align-items: center; gap: 4px; padding: 14px 12px 6px 20px; }
 .rf-title { flex: 1; font-size: 16px; font-weight: 650; }
 .rf-body { padding: 8px 20px 16px; overflow-y: auto; }
 .rf-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--rf-line); }
 
-.rf-stack { display: flex; flex-direction: column; gap: 10px; }
+.rf-stack { display: flex; flex-direction: column; gap: 12px; }
 .rf-row { display: flex; align-items: center; gap: 8px; }
 .rf-row > .rf-input { flex: 1; min-width: 0; }
-.rf-muted { color: var(--rf-muted); font-size: 13px; }
+.rf-muted { color: var(--rf-muted); font-size: 12.5px; }
+.rf-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rf-text { margin: 0; }
 .rf-status { min-height: 1.2em; font-size: 13px; color: var(--rf-muted); white-space: pre-wrap; }
 .rf-warn { color: var(--rf-danger) !important; }
+.rf-empty { padding: 28px 0; text-align: center; color: var(--rf-muted); }
 
 /* controls */
 .rf-input {
-    width: 100%;
-    margin: 0;
-    padding: 8px 10px;
-    font: inherit;
-    color: var(--rf-text);
-    background: var(--rf-bg);
-    border: 1px solid var(--rf-line);
-    border-radius: 8px;
-    outline: none;
+    width: 100%; margin: 0; padding: 8px 10px; font: inherit; color: var(--rf-text);
+    background: var(--rf-bg); border: 1px solid var(--rf-line); border-radius: 8px; outline: none;
 }
-.rf-input:focus { border-color: var(--rf-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rf-accent) 20%, transparent); }
-.rf-input:disabled { opacity: 0.6; }
+.rf-input:focus { border-color: var(--rf-accent); box-shadow: 0 0 0 3px var(--rf-accent-soft); }
+select.rf-input { cursor: pointer; }
 textarea.rf-input { resize: vertical; }
-.rf-topic { min-height: 120px; }
 .rf-mono { min-height: 60vh; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 
 .rf-btn {
@@ -89,48 +88,78 @@ textarea.rf-input { resize: vertical; }
     padding: 8px 14px; font: inherit; font-weight: 550; white-space: nowrap; cursor: pointer;
     color: var(--rf-text); background: var(--rf-panel); border: 1px solid var(--rf-line); border-radius: 8px;
 }
-.rf-btn:hover { border-color: var(--rf-muted); }
-.rf-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.rf-btn:hover { background: var(--rf-hover); }
 .rf-primary { color: var(--rf-accent-text); background: var(--rf-accent); border-color: var(--rf-accent); }
-.rf-primary:hover { filter: brightness(1.08); border-color: var(--rf-accent); }
-.rf-danger { color: var(--rf-danger); }
-.rf-actions .rf-left { margin-right: auto; }
+.rf-primary:hover { background: var(--rf-accent); filter: brightness(1.08); }
 
 .rf-icon {
     display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-    width: 32px; height: 32px; padding: 0; cursor: pointer; font-size: 15px;
+    width: 34px; height: 34px; padding: 0; cursor: pointer; font-size: 15px;
     color: var(--rf-muted); background: none; border: none; border-radius: 8px;
 }
-.rf-icon:hover { color: var(--rf-text); background: var(--rf-panel); }
+.rf-icon:hover { color: var(--rf-text); background: var(--rf-hover); }
 
-.rf-seg { display: inline-flex; padding: 2px; background: var(--rf-panel); border-radius: 8px; }
-.rf-seg button { padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; color: var(--rf-muted); background: none; border: none; border-radius: 6px; }
-.rf-seg button.rf-on { color: var(--rf-text); background: var(--rf-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.rf-seg { display: inline-flex; flex-shrink: 0; padding: 3px; background: var(--rf-panel); border-radius: 9px; }
+.rf-seg button { padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; color: var(--rf-muted); background: none; border: none; border-radius: 7px; }
+.rf-seg button.rf-on { color: var(--rf-text); background: var(--rf-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
 
-.rf-check { display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; }
-.rf-check input { accent-color: var(--rf-accent); margin: 0; }
-.rf-details > summary { cursor: pointer; padding: 6px 0; }
-.rf-details[open] { display: flex; flex-direction: column; gap: 6px; }
-.rf-list { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; padding: 4px 2px; }
+.rf-details > summary { cursor: pointer; padding: 2px 0; font-size: 13px; color: var(--rf-muted); }
+.rf-details[open] { display: flex; flex-direction: column; gap: 8px; }
+.rf-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rf-label { font-size: 12px; color: var(--rf-muted); }
 
-/* world (chat) cards */
+/* round profile pictures */
+.rf-avatar {
+    flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--rf-hover); color: var(--rf-muted);
+}
+.rf-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rf-avatar-lg { width: 52px; height: 52px; }
+
+/* bot picker */
+.rf-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; max-height: 60vh; overflow-y: auto; padding: 2px; }
+.rf-pick {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 10px 4px;
+    font: inherit; cursor: pointer; color: var(--rf-text); background: none; border: 1px solid transparent; border-radius: 12px;
+}
+.rf-pick:hover { background: var(--rf-panel); border-color: var(--rf-line); }
+.rf-pick .rf-avatar { width: 56px; height: 56px; }
+.rf-pick-name { width: 100%; font-size: 12.5px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* chat picker, like ST's chat history list */
+.rf-chat-list { display: flex; flex-direction: column; gap: 6px; max-height: 64vh; overflow-y: auto; }
+.rf-chat {
+    display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 10px 12px; text-align: left;
+    font: inherit; cursor: pointer; color: var(--rf-text); background: var(--rf-panel); border: 1px solid var(--rf-line); border-radius: 10px;
+}
+.rf-chat:hover { background: var(--rf-hover); }
+.rf-chat.rf-on { border-color: var(--rf-accent); box-shadow: 0 0 0 2px var(--rf-accent-soft); }
+.rf-chat-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.rf-chat-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-chat-preview {
+    font-size: 13px; color: var(--rf-muted);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* chat (world) cards in the settings window */
 .rf-worlds { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
 .rf-world {
-    display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px;
-    background: var(--rf-panel); border: 1px solid var(--rf-line); border-left: 4px solid var(--rf-world, var(--rf-line));
-    border-radius: var(--rf-radius);
+    display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px;
+    background: var(--rf-panel); border: 1px solid var(--rf-line); border-top: 4px solid var(--rf-world, var(--rf-line));
+    border-radius: 12px;
 }
 .rf-world-head { display: flex; align-items: center; gap: 6px; }
 .rf-world-num { font-weight: 650; white-space: nowrap; }
-.rf-alias { flex: 1; min-width: 0; padding: 5px 8px; }
-.rf-world-body { display: flex; flex-direction: column; gap: 10px; }
-.rf-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.rf-label { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--rf-muted); }
-.rf-compact {
-    padding: 0; font: inherit; text-align: left; cursor: pointer; color: var(--rf-text); background: none; border: none;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.rf-alias { flex: 1; min-width: 0; padding: 5px 8px; font-size: 13px; }
+.rf-who {
+    display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px; text-align: left;
+    font: inherit; cursor: pointer; color: var(--rf-text); background: var(--rf-bg); border: 1px solid var(--rf-line); border-radius: 10px;
 }
-.rf-info { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--rf-muted); min-height: 1.2em; }
+.rf-who:hover { border-color: var(--rf-accent); }
+.rf-who-text { display: flex; flex-direction: column; min-width: 0; }
+.rf-who-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-info { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--rf-muted); }
 
 .rf-swatch {
     position: relative; flex-shrink: 0; width: 16px; height: 16px; margin: 0 2px; cursor: pointer;
@@ -139,12 +168,17 @@ textarea.rf-input { resize: vertical; }
 .rf-swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 
 @media (max-width: 600px) {
-    .rf-overlay { padding: 8px; align-items: flex-end; }
-    .rf-card { max-height: 92vh; border-radius: 16px 16px 12px 12px; }
+    dialog.rf-dialog { padding: 10px; }
     .rf-worlds { grid-template-columns: 1fr; }
+    .rf-head { padding: 12px 8px 4px 16px; }
     .rf-body { padding: 8px 14px 14px; }
     .rf-actions { padding: 10px 14px 14px; }
+    .rf-pick-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
 }
+
+/* corner buttons added to ST's own input popup (they follow the ST theme on purpose) */
+dialog.popup .rf-popup-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 1; }
+dialog.popup .rf-popup-tools .menu_button { margin: 0; }
 
 /* name highlights inside chat messages (only on crossover messages) */
 #chat .mes_text mark.xo-hl {

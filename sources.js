@@ -25,7 +25,7 @@ export function listCharacters() {
 export function listGroups() {
     return (ctx().groups || [])
         .filter(g => g && g.id)
-        .map(g => ({ id: g.id, name: g.name }))
+        .map(g => ({ id: g.id, name: g.name, avatar: groupAvatar(g) }))
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -72,6 +72,8 @@ export async function listChats(world) {
             label: stripExt(x.file_name),
             count: Number(x.chat_items) || null,
             last: x.last_mes || null,
+            preview: typeof x.mes === 'string' ? x.mes : '',
+            size: x.file_size || '',
         }))
         .sort((a, b) => (new Date(b.last).getTime() || 0) - (new Date(a.last).getTime() || 0));
 }
@@ -199,6 +201,24 @@ export async function getLoreEntries(char) {
         book: `embedded:${char?.avatar}`,
         entries: embedded.filter(e => e && e.enabled !== false && e.content).map((e, i) => normalizeEntry(e, e.id ?? i)),
     };
+}
+
+/** Thumbnail URL for a character avatar (small, cached by ST). */
+export function avatarUrl(avatar) {
+    if (!avatar) return '';
+    const { getThumbnailUrl } = ctx();
+    return typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', avatar) : `/thumbnail?type=avatar&file=${encodeURIComponent(avatar)}`;
+}
+
+/** Picture for a world: the character, or the group's own avatar / first member. */
+export function worldAvatar(world) {
+    if (world.kind !== 'group') return avatarUrl(world.avatar);
+    const group = findGroup(world.groupId);
+    return group?.avatar_url || avatarUrl(group?.members?.[0]);
+}
+
+export function groupAvatar(group) {
+    return group?.avatar_url || avatarUrl(group?.members?.[0]);
 }
 
 export function worldDisplayName(world) {

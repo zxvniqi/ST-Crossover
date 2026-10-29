@@ -17,6 +17,7 @@ const defaultSettings = Object.freeze({
     sets: [],        // [{ id, name, worlds }]
     activeSetId: '', // the saved set the draft was loaded from ('' = unsaved)
     lastTopic: '',
+    uiTheme: 'auto', // settings window: 'auto' | 'light' | 'dark'
 });
 
 /**
