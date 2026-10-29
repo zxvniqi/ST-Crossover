@@ -89,7 +89,7 @@ function registerCommand() {
                 return '';
             }
             try {
-                const result = await runCrossover(set, topic, settings.options);
+                const result = await runCrossover(set, topic);
                 if (!result) return '';
                 toastr.success('채팅에 숨김 메시지로 넣었어요.');
                 return result.text;
@@ -140,9 +140,10 @@ function init() {
 }
 
 const { eventSource, event_types } = ctx();
-eventSource.on(event_types.APP_READY, init);
-// Loaded late (e.g. enabled after startup): the app is already up when the preloader is gone.
-if (document.getElementById('extensionsMenu') && !document.getElementById('preloader')) init();
+// The wand menu is static page markup and settings are loaded before extensions run,
+// so set up right away instead of waiting for the chat to finish loading (APP_READY).
+if (document.getElementById('extensionsMenu')) init();
+else eventSource.on(event_types.APP_INITIALIZED ?? event_types.APP_READY, init);
 // The chat we just left may have new messages on disk; drop cached copies so the next read is fresh.
 eventSource.on(event_types.CHAT_CHANGED, () => {
     clearCache();

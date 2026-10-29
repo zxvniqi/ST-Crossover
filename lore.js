@@ -17,11 +17,10 @@ function countHits(text, entry) {
 /**
  * @param {object[]} chars full character objects of the world
  * @param {string} scanText recent chat + summary, used to rank entries
- * @param {string[]|null} chosen world.members: null = automatic, otherwise entry ids
- * @param {number} maxAuto how many entries automatic mode keeps
+ * @param {string[]|null} chosen world.members: null = automatic (everyone mentioned), otherwise entry ids
  * @returns {Promise<{ setting: {name: string, content: string}[], members: object[], candidates: {id, name, score, picked}[] }>}
  */
-export async function collectLore(chars, scanText, chosen, maxAuto) {
+export async function collectLore(chars, scanText, chosen) {
     const setting = [];
     const pool = [];
     for (const char of chars) {
@@ -37,7 +36,7 @@ export async function collectLore(chars, scanText, chosen, maxAuto) {
         const ids = new Set(chosen);
         picked = pool.filter(e => ids.has(e.id));
     } else {
-        picked = pool.filter(e => e.score > 0).sort((a, b) => b.score - a.score).slice(0, Math.max(0, maxAuto));
+        picked = pool.filter(e => e.score > 0).sort((a, b) => b.score - a.score);
     }
     const pickedIds = new Set(picked.map(e => e.id));
 

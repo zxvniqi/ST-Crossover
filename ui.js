@@ -1,6 +1,6 @@
 // Main popup: pick worlds, write a topic, generate into the open chat.
 
-import { ctx, log, MAX_WORLDS, formatDate, uid } from './util.js';
+import { ctx, log, formatDate } from './util.js';
 import { h, icon, searchSelect } from './dom.js';
 import { getSettings, getActiveSet, newSet, newWorld, save } from './settings.js';
 import { listCharacters, listGroups, listChats, clearCache, worldDisplayName } from './sources.js';
@@ -9,13 +9,11 @@ import { collectWorld } from './prompt.js';
 import { worldColor, hexToRgba } from './highlight.js';
 import { runCrossover, prepare, cancel, isRunning } from './runner.js';
 
-const LENGTHS = [['short', '짧게'], ['medium', '보통'], ['long', '길게']];
 
 /* ---------- world card ---------- */
 
 function worldCard(world, index, onRemove) {
     const card = h('div.xo-world');
-    const settings = getSettings();
     let collapsed = !!world.file; // configured worlds start folded to keep the list short
 
     const render = () => {
@@ -95,7 +93,7 @@ function worldCard(world, index, onRemove) {
                 h('summary', {}, `${auto ? '자동' : '직접 선택'} · ${summaryText}`),
                 h('label.checkbox_label', {},
                     h('input', { type: 'checkbox', checked: auto, onchange: e => setMembers(e.target.checked ? null : picked.map(p => p.id)) }),
-                    h('span', {}, `자동 (대화·요약에 많이 나온 순, 최대 ${settings.options.loreMembers}명)`)),
+                    h('span', {}, '자동 (대화·요약에 나온 인물 모두)')),
                 candidates.length > 12 ? filter : null,
                 h('div.xo-member-list', {}, ...rows));
             membersBox.replaceChildren(h('span', {}, '등장인물 (로어북)'), details);
@@ -109,7 +107,7 @@ function worldCard(world, index, onRemove) {
             info.textContent = '확인 중…';
             info.className = 'xo-info';
             const seq = ++inspectSeq;
-            const r = await collectWorld(world, index, settings.options);
+            const r = await collectWorld(world, index);
             if (seq !== inspectSeq) return; // a newer check started meanwhile
             if (!r.ok) {
                 info.textContent = `⚠ ${r.error}`;
@@ -230,7 +228,6 @@ function composePane(onDone) {
 
     const addBtn = h('button.menu_button.xo-add', { type: 'button', onclick: () => {
         const set = getActiveSet();
-        if (set.worlds.length >= MAX_WORLDS) return;
         set.worlds.push(newWorld());
         save();
         renderSet();
@@ -243,8 +240,6 @@ function composePane(onDone) {
             save();
             renderSet();
         })));
-        addBtn.disabled = set.worlds.length >= MAX_WORLDS;
-        addBtn.title = addBtn.disabled ? `최대 ${MAX_WORLDS}개까지` : '';
     }
 
     async function setAction(kind) {
@@ -256,13 +251,6 @@ function composePane(onDone) {
             const created = newSet(String(name).trim());
             settings.sets.push(created);
             settings.activeSetId = created.id;
-        } else if (kind === 'copy') {
-            const copy = structuredClone(set);
-            copy.id = uid();
-            copy.name = `${set.name} 복사본`;
-            copy.worlds.forEach(w => { w.id = uid(); });
-            settings.sets.push(copy);
-            settings.activeSetId = copy.id;
         } else if (kind === 'rename') {
             const name = await Popup.show.input('세트 이름 바꾸기', '새 이름', set.name);
             if (!name) return;
@@ -285,42 +273,6 @@ function composePane(onDone) {
         oninput: e => { settings.lastTopic = e.target.value; save(); },
     });
 
-    const o = settings.options;
-    const opt = (key, el) => { el.addEventListener('change', () => {
-        o[key] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
-        save();
-    }); return el; };
-    const lengthSeg = h('div.xo-seg', {}, ...LENGTHS.map(([v, l]) => h('button', {
-        type: 'button',
-        className: `xo-seg-btn${o.length === v ? ' xo-on' : ''}`,
-        onclick: e => {
-            o.length = v;
-            save();
-            lengthSeg.querySelectorAll('.xo-seg-btn').forEach(b => b.classList.toggle('xo-on', b === e.currentTarget));
-        },
-    }, l)));
-
-    const optionsBox = h('details.xo-options', {},
-        h('summary', {}, '세부 옵션'),
-        h('div.xo-grid', {},
-            h('div.xo-field', {}, h('span', {}, '분량'), lengthSeg),
-            h('div.xo-field', {}, h('span', {}, '세계별 최근 메시지'),
-                opt('recentMessages', h('input.text_pole', { type: 'number', min: 0, max: 200, value: o.recentMessages }))),
-            h('div.xo-field', {}, h('span', {}, '세계별 최대 글자 수'),
-                opt('charsPerWorld', h('input.text_pole', { type: 'number', min: 2000, max: 60000, step: 1000, value: o.charsPerWorld }))),
-            h('div.xo-field', {}, h('span', {}, '출력 언어'),
-                opt('language', h('input.text_pole', { type: 'text', value: o.language, placeholder: 'Korean' }))),
-            h('div.xo-field', {}, h('span', {}, '다인봇 자동 등장인물 수'),
-                opt('loreMembers', h('input.text_pole', { type: 'number', min: 0, max: 12, value: o.loreMembers }))),
-            h('label.checkbox_label.xo-check', {},
-                opt('includeCard', h('input', { type: 'checkbox', checked: o.includeCard })), h('span', {}, '캐릭터 카드 설정 포함')),
-            h('label.checkbox_label.xo-check', {},
-                opt('includeLoreSetting', h('input', { type: 'checkbox', checked: o.includeLoreSetting })), h('span', {}, '로어북 상시 항목을 세계 설정으로 포함')),
-        ),
-        h('div.xo-field', {}, h('span', {}, '추가 지시 (선택)'),
-            opt('extraInstruction', h('textarea.text_pole', { rows: 2, value: o.extraInstruction, placeholder: '문체, 시점, 금지 사항 등' }))),
-    );
-
     const genBtn = h('button.menu_button.xo-primary', { type: 'button', onclick: generate }, icon('wand-magic-sparkles'), ' 생성');
     const stopBtn = h('button.menu_button', { type: 'button', hidden: true, onclick: () => { cancel(); status.textContent = '중지했어요.'; } }, icon('stop'), ' 중지');
     const previewBtn = h('button.menu_button', { type: 'button', onclick: preview, title: '모델에게 보낼 내용을 확인' }, icon('eye'), ' 미리보기');
@@ -335,8 +287,11 @@ function composePane(onDone) {
     async function preview() {
         try {
             status.textContent = '불러오는 중…';
-            const built = await prepare(getActiveSet(), topic.value, o);
-            const full = `[SYSTEM]\n${built.systemPrompt}\n\n[PROMPT]\n${built.prompt}`;
+            const built = await prepare(getActiveSet(), topic.value);
+            const { prompt, systemPrompt } = built.request;
+            const full = Array.isArray(prompt)
+                ? prompt.map(m => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n')
+                : `[SYSTEM]\n${systemPrompt}\n\n[PROMPT]\n${prompt}`;
             let tokens = '';
             try { tokens = ` · 약 ${(await ctx().getTokenCountAsync(full)).toLocaleString()} 토큰`; } catch { /* optional */ }
             status.textContent = '';
@@ -356,7 +311,7 @@ function composePane(onDone) {
         if (isRunning()) return;
         setBusy(true);
         try {
-            const result = await runCrossover(getActiveSet(), topic.value, o, s => { status.textContent = s; });
+            const result = await runCrossover(getActiveSet(), topic.value, s => { status.textContent = s; });
             if (!result) return;
             if (result.failed.length) toastr.warning(`건너뛴 세계: ${result.failed.map(f => f.label).join(', ')}`);
             toastr.success('채팅에 숨김 메시지로 넣었어요.');
@@ -377,15 +332,13 @@ function composePane(onDone) {
             h('span.xo-muted', {}, '세트'),
             setSelect,
             h('button.xo-icon-btn', { type: 'button', title: '새 세트', onclick: () => setAction('new') }, icon('plus')),
-            h('button.xo-icon-btn', { type: 'button', title: '복제', onclick: () => setAction('copy') }, icon('clone')),
             h('button.xo-icon-btn', { type: 'button', title: '이름 바꾸기', onclick: () => setAction('rename') }, icon('pen')),
             h('button.xo-icon-btn', { type: 'button', title: '삭제', onclick: () => setAction('delete') }, icon('trash-can')),
         ),
         worldsBox,
         addBtn,
         h('div.xo-field', {}, h('span', {}, '주제 / 보고 싶은 장면'), topic),
-        optionsBox,
-        h('div.xo-muted', {}, '결과는 지금 열린 채팅에 숨김 메시지로 들어가요. 번역·테마는 적용되고, AI 맥락에는 들어가지 않아요.'),
+        h('div.xo-muted', {}, '언어·분량·문체는 지금 쓰는 프리셋을 따라요. 결과는 열린 채팅에 숨김 메시지로 들어가고, AI 맥락에는 들어가지 않아요.'),
         h('div.xo-row.xo-actions', {}, refreshBtn, previewBtn, stopBtn, genBtn),
         status,
     );

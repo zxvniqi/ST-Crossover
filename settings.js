@@ -3,25 +3,14 @@
 
 import { MODULE_NAME, uid, ctx } from './util.js';
 
-const SETTINGS_VERSION = 1;
-
-export const defaultOptions = Object.freeze({
-    recentMessages: 20,     // recent messages per world
-    charsPerWorld: 8000,    // rough character budget per world
-    includeCard: true,      // character description/personality/scenario
-    loreMembers: 4,         // multi-character cards: lorebook people picked automatically per world
-    includeLoreSetting: true, // always-on lorebook entries as world setting
-    length: 'medium',       // short | medium | long
-    language: 'Korean',     // output language (sent to the model)
-    extraInstruction: '',   // free-form, sent as-is
-});
+// v2: generation options removed (language, length and style come from the preset).
+const SETTINGS_VERSION = 2;
 
 const defaultSettings = Object.freeze({
     version: SETTINGS_VERSION,
     debug: false,
     activeSetId: '',
     sets: [],
-    options: defaultOptions,
     lastTopic: '',
 });
 
@@ -47,8 +36,9 @@ export function getSettings() {
     for (const [key, value] of Object.entries(defaultSettings)) {
         if (!Object.hasOwn(s, key)) s[key] = structuredClone(value);
     }
-    for (const [key, value] of Object.entries(defaultOptions)) {
-        if (!Object.hasOwn(s.options, key)) s.options[key] = value;
+    if (s.version < SETTINGS_VERSION) {
+        delete s.options;
+        s.version = SETTINGS_VERSION;
     }
     if (!Array.isArray(s.sets)) s.sets = [];
     if (s.sets.length === 0) s.sets.push(newSet('기본 세트'));

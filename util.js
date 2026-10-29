@@ -1,7 +1,6 @@
 // Small shared helpers. No ST state is cached here.
 
 export const MODULE_NAME = 'crossover_episodes';
-export const MAX_WORLDS = 4;
 
 let debugEnabled = false;
 

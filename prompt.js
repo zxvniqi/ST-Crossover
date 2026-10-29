@@ -10,11 +10,17 @@ import { worldColor } from './highlight.js';
 /** The model appends a name map after this line; it is parsed for highlights and removed from the episode. */
 export const NAME_MAP_MARKER = '[[NAMES]]';
 
-const LENGTH_HINT = {
-    short: 'about 600 words',
-    medium: 'about 1,200 words',
-    long: 'about 2,500 words',
-};
+// Per-item caps (characters) so one huge card or summary cannot crowd out the others.
+// No caps on how many worlds or people take part.
+const LIMIT = Object.freeze({
+    card: 3000,
+    member: 2000,
+    settingEntry: 1500,
+    persona: 1500,
+    summary: 4000,
+    recentChars: 6000,
+    recentMessages: 20,
+});
 
 /** Push markdown headings inside card/summary text below our own section levels. */
 function demote(text) {
@@ -57,7 +63,7 @@ function recentScenes(messages, count, budget, userName) {
  * Gather everything for one world. Errors bubble up with the world label so the UI can point at it.
  * @returns {Promise<object>}
  */
-export async function collectWorld(world, index, options) {
+export async function collectWorld(world, index) {
     const label = world.label?.trim() || `${worldDisplayName(world)} #${index + 1}`;
     try {
         const chat = await loadChat(world);
@@ -66,39 +72,29 @@ export async function collectWorld(world, index, options) {
         const candidates = await findSummaries(chat);
         const summary = pickSummary(candidates, world.summary);
 
-        // Rough shares of the per-world budget; the recent log takes whatever is left.
-        const budget = Math.max(2000, Number(options.charsPerWorld) || 8000);
-        const share = ratio => Math.floor(budget * ratio);
-
         const scanText = chat.messages.slice(-30).map(m => m?.mes || '').join('\n') + '\n' + (summary?.text || '');
-        const lore = await collectLore(chars, scanText, world.members, Number(options.loreMembers) || 0);
-        const memberBudget = lore.members.length ? Math.floor(share(0.25) / lore.members.length) : 0;
-        const settingBudget = lore.setting.length ? Math.floor(share(0.1) / lore.setting.length) : 0;
+        const lore = await collectLore(chars, scanText, world.members);
         const fill = text => cleanText(fillNames(text, chars[0]?.name, persona.name));
 
         // A card whose people live in its lorebook (multi-character bot) is a setting, not a person.
         const ownersWithMembers = new Set(lore.members.map(m => m.owner));
-        const cardBudget = options.includeCard ? Math.floor(share(0.2) / Math.max(1, chars.length)) : 0;
         const cast = [
             ...chars.map(c => ({
                 name: c.name,
                 avatar: c.avatar,
                 isSetting: ownersWithMembers.has(c.avatar),
-                card: cardBudget ? clipHead(cardText(c, persona.name), cardBudget) : '',
+                card: clipHead(cardText(c, persona.name), LIMIT.card),
             })),
             ...lore.members.map(m => ({
                 name: m.name,
                 loreId: m.id,
-                card: clipHead(fill(m.content), memberBudget),
+                card: clipHead(fill(m.content), LIMIT.member),
             })),
         ];
-        const setting = options.includeLoreSetting
-            ? lore.setting.map(s => `#### ${s.name}\n${clipHead(fill(s.content), settingBudget)}`).join('\n\n')
-            : '';
-        const personaText = clipHead(fill(persona.description), share(0.08));
-        const summaryText = summary ? clipTail(summary.text, share(0.25)) : '';
-        const used = cast.reduce((n, c) => n + c.card.length, 0) + setting.length + personaText.length + summaryText.length;
-        const recent = recentScenes(chat.messages, Number(options.recentMessages) || 20, Math.max(1500, budget - used), persona.name);
+        const setting = lore.setting.map(s => `#### ${s.name}\n${clipHead(fill(s.content), LIMIT.settingEntry)}`).join('\n\n');
+        const personaText = clipHead(fill(persona.description), LIMIT.persona);
+        const summaryText = summary ? clipTail(summary.text, LIMIT.summary) : '';
+        const recent = recentScenes(chat.messages, LIMIT.recentMessages, LIMIT.recentChars, persona.name);
 
         return {
             ok: true,
@@ -165,9 +161,10 @@ function worldBlock(w, n) {
 }
 
 /**
- * @returns {{ systemPrompt: string, prompt: string, worlds: object[], failed: object[] }}
+ * Crossover-specific text only. Language, length and style come from the user's preset (preset.js).
+ * @returns {{ parts: { system: string, material: string, request: string }, worlds: object[], failed: object[] }}
  */
-export function buildPrompt(collected, topic, options) {
+export function buildPrompt(collected, topic) {
     const worlds = collected.filter(w => w.ok);
     const failed = collected.filter(w => !w.ok);
     const shared = assignAliases(worlds);
@@ -180,28 +177,25 @@ export function buildPrompt(collected, topic, options) {
         : '';
     const labels = worlds.flatMap(w => [...w.cast.filter(c => !c.isSetting).map(c => c.alias), w.persona.alias]);
 
-    const systemPrompt = [
-        'You are a skilled fiction writer creating a standalone crossover episode.',
+    const system = [
+        '[Crossover episode] Instead of continuing a chat, write one standalone crossover episode.',
         `The characters below come from ${worlds.length} separate stories ("worlds"). For this episode they meet in one shared scene.`,
         sameNote,
         'Keep every character true to their own world: personality, speech style, relationships and what they know.',
         'Characters only know what happened in their own world unless the episode shows them learning it.',
         'The user\'s characters are written as full characters in the story, consistent with their logs.',
         'This is a side story. Do not continue or change any world\'s canon, and do not resolve its open plotlines.',
-        `Write in ${options.language || 'Korean'}. Length: ${LENGTH_HINT[options.length] || LENGTH_HINT.medium}.`,
-        'Match the formatting style of the chat logs (for example *narration* in asterisks or "dialogue" in quotes, if the logs use them).',
-        'Names below are labels, possibly in another language. In the prose, write every name the way it is naturally written in the output language.',
-        'Output the episode text: an optional short title on the first line, then the prose. No notes or explanations.',
-        `After the episode, add a line "${NAME_MAP_MARKER}" and then one line per person who appears: "<label> = <every spelling you used for them, comma-separated>". `
-            + `Labels: ${labels.map(l => `"${l}"`).join(', ')}.`,
+        'Names below are labels, possibly in another language. In the prose, write every name the way it is naturally written in the language you write in.',
     ].filter(Boolean).join('\n');
 
     const request = [
         '=== EPISODE REQUEST ===',
-        `Topic / what the user wants to see: ${topic.trim() || 'Surprise the reader with a fun, natural reason for these worlds to meet.'}`,
-        options.extraInstruction?.trim() ? `Additional instructions: ${options.extraInstruction.trim()}` : '',
-    ].filter(Boolean).join('\n');
+        `What the user wants to see: ${topic.trim() || 'Surprise the reader with a fun, natural reason for these worlds to meet.'}`,
+        'Write the episode now: an optional short title on the first line, then the prose.',
+        `After the episode, add a line "${NAME_MAP_MARKER}" and then one line per person who appears: "<label> = <every spelling you used for them, comma-separated>". `
+            + `Labels: ${labels.map(l => `"${l}"`).join(', ')}.`,
+    ].join('\n');
 
-    const prompt = [...worlds.map((w, i) => worldBlock(w, i + 1)), request].join('\n\n');
-    return { systemPrompt, prompt, worlds, failed };
+    const material = worlds.map((w, i) => worldBlock(w, i + 1)).join('\n\n');
+    return { parts: { system, material, request }, worlds, failed };
 }

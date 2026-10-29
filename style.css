@@ -83,12 +83,8 @@
 .xo-root .xo-add:disabled,
 .xo-root .menu_button:disabled { opacity: 0.4; cursor: not-allowed; }
 .xo-root .xo-primary { font-weight: 600; border-color: var(--xo-accent); }
-.xo-root .xo-danger { color: var(--fullred, #d33); }
 
 .xo-root .xo-topic { width: 100%; resize: vertical; }
-.xo-root .xo-options > summary { cursor: pointer; opacity: 0.8; padding: 4px 0; }
-.xo-root .xo-options[open] { display: flex; flex-direction: column; gap: 8px; }
-.xo-root .xo-check { margin: 0; }
 
 .xo-root .xo-pane { display: flex; flex-direction: column; gap: var(--xo-gap); }
 .xo-root .xo-status { min-height: 1.2em; font-size: 0.9em; white-space: pre-wrap; }
