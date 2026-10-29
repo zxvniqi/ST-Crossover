@@ -7,7 +7,7 @@ import { h, icon } from './dom.js';
 import { openCrossover } from './ui.js';
 import { runCrossover } from './runner.js';
 import { clearCache } from './sources.js';
-import { highlightChat } from './chat-insert.js';
+import { highlightChat, watchChat } from './chat-insert.js';
 
 const WAND_ID = 'xo_wand_button';
 const DRAWER_ID = 'xo_settings_drawer';
@@ -129,6 +129,7 @@ function init() {
             if (e.target instanceof Element && e.target.closest('#extensionsMenuButton')) addWandButton();
         }, true);
         addSettingsDrawer();
+        watchChat();
         registerCommand();
         registerDebug();
         // The archive was removed in 0.2.0; drop its leftover storage.

@@ -60,15 +60,26 @@ function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Characters translators and models swap freely: full/half-width brackets and middle dots.
+const LOOSE_CHARS = { '(': '[(（]', '（': '[(（]', ')': '[)）]', '）': '[)）]', '・': '[・·･]', '·': '[・·･]', '･': '[・·･]' };
+
+/** "아델스타인 (대전쟁AU)" also matches "아델스타인（대전쟁 AU）": spacing and bracket width are ignored. */
+function loosePattern(name) {
+    return [...name].filter(ch => !/\s/.test(ch)).map(ch => LOOSE_CHARS[ch] || escapeRegex(ch)).join('\\s*');
+}
+
 /**
  * Wrap name occurrences in <mark> inside already-rendered content.
  * Only text nodes are touched, so markup produced by the formatter stays intact.
  */
 export function applyHighlights(root, marks = []) {
-    const byName = new Map();
-    for (const m of marks) for (const n of m.names || []) if (n.length >= MIN_NAME_LENGTH) byName.set(n, m);
-    if (!byName.size) return;
-    const pattern = new RegExp([...byName.keys()].sort((a, b) => b.length - a.length).map(escapeRegex).join('|'), 'g');
+    const entries = [];
+    for (const m of marks) for (const n of m.names || []) if (n.length >= MIN_NAME_LENGTH) entries.push({ name: n, mark: m });
+    if (!entries.length) return;
+    // Longest first so a full alias wins over a name it contains; one capture group per name tells which matched.
+    entries.sort((a, b) => b.name.length - a.name.length);
+    const pattern = new RegExp(entries.map(e => `(${loosePattern(e.name)})`).join('|'), 'g');
+    const markOf = match => entries[match.slice(1).findIndex(g => g !== undefined)].mark;
 
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
         acceptNode: node => (node.parentElement?.closest('code, pre, mark') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
@@ -85,7 +96,7 @@ export function applyHighlights(root, marks = []) {
         let last = 0;
         for (const match of matches) {
             if (match.index > last) parts.push(text.slice(last, match.index));
-            const m = byName.get(match[0]);
+            const m = markOf(match);
             parts.push(h('mark.xo-hl', { title: m.world, style: `--xo-hl: ${hexToRgba(m.color, 0.55)}` }, match[0]));
             last = match.index + match[0].length;
         }

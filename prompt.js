@@ -1,6 +1,6 @@
 // Builds the crossover prompt. Everything the model reads here is English.
 
-import { cleanText, clipHead, clipTail, fillNames } from './util.js';
+import { ctx, cleanText, clipHead, clipTail, fillNames } from './util.js';
 import { loadChat, worldCharacters, worldDisplayName } from './sources.js';
 import { resolvePersona } from './persona.js';
 import { findSummaries, pickSummary } from './summaries.js';
@@ -21,6 +21,18 @@ const LIMIT = Object.freeze({
     recentChars: 6000,
     recentMessages: 20,
 });
+
+const LOCALE_LANGUAGE = { ko: 'Korean', ja: 'Japanese', zh: 'Chinese', en: 'English', ru: 'Russian', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese', vi: 'Vietnamese', th: 'Thai', id: 'Indonesian' };
+
+/**
+ * The language of the ST interface, i.e. what a translator extension most likely translates into.
+ * Asking for that spelling too keeps highlights working after translation.
+ */
+function readerLanguage() {
+    const { getCurrentLocale } = ctx();
+    const code = String(typeof getCurrentLocale === 'function' ? getCurrentLocale() : navigator.language || '').slice(0, 2).toLowerCase();
+    return LOCALE_LANGUAGE[code] || '';
+}
 
 /** Push markdown headings inside card/summary text below our own section levels. */
 function demote(text) {
@@ -176,6 +188,7 @@ export function buildPrompt(collected, topic) {
           + '(for example with a short world tag written in the output language). They may react to meeting another version of themselves.'
         : '';
     const labels = worlds.flatMap(w => [...w.cast.filter(c => !c.isSetting).map(c => c.alias), w.persona.alias]);
+    const reader = readerLanguage();
 
     const system = [
         '[Crossover episode] Instead of continuing a chat, write one standalone crossover episode.',
@@ -192,7 +205,8 @@ export function buildPrompt(collected, topic) {
         '=== EPISODE REQUEST ===',
         `What the user wants to see: ${topic.trim() || 'Surprise the reader with a fun, natural reason for these worlds to meet.'}`,
         'Write the episode now: an optional short title on the first line, then the prose.',
-        `After the episode, add a line "${NAME_MAP_MARKER}" and then one line per person who appears: "<label> = <every spelling you used for them, comma-separated>". `
+        `After the episode, add a line "${NAME_MAP_MARKER}" and then one line per person who appears: "<label> = <every spelling you used for them, comma-separated>`
+            + (reader ? `, <how the name is usually written in ${reader}, with the same world tag if you used one>` : '') + '". '
             + `Labels: ${labels.map(l => `"${l}"`).join(', ')}.`,
     ].join('\n');
 

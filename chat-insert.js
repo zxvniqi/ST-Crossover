@@ -43,6 +43,26 @@ export async function insertIntoChat(episode) {
 }
 
 let pending = 0;
+let observer = null;
+
+function isCrossoverNode(node) {
+    const mes = (node instanceof Element ? node : node?.parentElement)?.closest?.('#chat .mes');
+    if (!mes) return false;
+    return !!ctx().chat?.[Number(mes.getAttribute('mesid'))]?.extra?.[EXTRA_KEY];
+}
+
+/**
+ * Translators and other extensions redraw message text without emitting events
+ * (updateMessageBlock). Watch the chat and repaint only when a crossover message changed.
+ */
+export function watchChat() {
+    const chatEl = document.getElementById('chat');
+    if (!chatEl || observer) return;
+    observer = new MutationObserver(mutations => {
+        if (mutations.some(m => isCrossoverNode(m.target))) highlightChat();
+    });
+    observer.observe(chatEl, { childList: true, subtree: true });
+}
 
 /**
  * (Re)apply name highlights to crossover messages currently in the DOM.
