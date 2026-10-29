@@ -38,8 +38,20 @@ export async function insertIntoChat(episode) {
     await c.saveChat();
     const index = c.chat.length - 1;
     highlightChat();
-    document.querySelector(`#chat .mes[mesid="${index}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollChatTo(index);
     return index;
+}
+
+/**
+ * Bring the start of a message into view by scrolling #chat only.
+ * (scrollIntoView would also scroll the page itself on mobile, pushing the input bar and QR row away.)
+ */
+function scrollChatTo(index) {
+    const chatEl = document.getElementById('chat');
+    const mes = chatEl?.querySelector(`.mes[mesid="${index}"]`);
+    if (!mes) return;
+    const top = chatEl.scrollTop + mes.getBoundingClientRect().top - chatEl.getBoundingClientRect().top;
+    chatEl.scrollTo({ top, behavior: 'smooth' });
 }
 
 let pending = 0;

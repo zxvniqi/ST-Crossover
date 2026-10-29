@@ -8,7 +8,7 @@ import { clearCache, worldDisplayName, worldAvatar, listChats } from './sources.
 import { listPersonas } from './persona.js';
 import { collectWorld } from './prompt.js';
 import { worldColor, hexToRgba } from './highlight.js';
-import { runCrossover, prepare, cancel, isRunning } from './runner.js';
+import { runCrossover, prepare, isRunning } from './runner.js';
 import { openModal, button, askText, confirmBox } from './modal.js';
 import { pickSource, pickChat } from './pickers.js';
 
@@ -278,14 +278,12 @@ export async function openPrompt() {
     settings.lastTopic = result;
     save();
 
-    const handle = ctx().loader?.show?.({ blocking: false, message: `${EXT_NAME} 쓰는 중…`, toastMode: 'stoppable', onStop: cancel });
+    // Progress is shown the ST way: the Send button turns into Stop while writing (see runner.js).
     try {
         const done = await runCrossover(getDraft(), result);
         if (done?.failed.length) toastr.warning(`건너뛴 채팅: ${done.failed.map(f => f.label).join(', ')}`);
     } catch (err) {
         log.error('generation failed', err);
         toastr.error(err.message, EXT_NAME);
-    } finally {
-        await handle?.hide?.();
     }
 }

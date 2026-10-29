@@ -4,6 +4,8 @@
 import { h, icon } from './dom.js';
 import { getSettings, save } from './settings.js';
 
+const TAP_GUARD_MS = 450;
+
 /** 'light' | 'dark' — the user's choice for these windows, defaulting to the device setting. */
 function currentTheme() {
     const saved = getSettings().uiTheme;
@@ -59,8 +61,16 @@ export function openModal({ title = '', body, actions = [], headerExtra = null, 
             resolve(value);
         },
     };
+    // A window that opens right after a tap (bot → chat picker) must not take that same tap.
+    const readyAt = Date.now() + TAP_GUARD_MS;
     dialog.addEventListener('cancel', e => { e.preventDefault(); api.close(null); }); // Esc
-    dialog.addEventListener('mousedown', e => { if (e.target === dialog) api.close(null); }); // backdrop
+    dialog.addEventListener('mousedown', e => { if (e.target === dialog && Date.now() >= readyAt) api.close(null); }); // backdrop
+    dialog.addEventListener('click', e => {
+        if (Date.now() < readyAt) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }, true);
     document.body.append(dialog);
     dialog.showModal();
     return api;

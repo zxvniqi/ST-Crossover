@@ -16,13 +16,21 @@ export function isRunning() {
 
 /** Stops the request if the backend supports it; the result is discarded either way. */
 export function cancel() {
-    if (!running) return;
+    if (!running || cancelled) return; // stopGeneration emits GENERATION_STOPPED, which calls us again
     cancelled = true;
     try {
         ctx().stopGeneration?.();
     } catch (err) {
         log.debug('stopGeneration failed', err);
     }
+    ctx().activateSendButtons?.(); // give the input back right away; a late reply is ignored
+}
+
+/** While writing, show ST's own stop button in place of Send (like a normal reply). */
+function busyButtons(on) {
+    const c = ctx();
+    if (on) c.deactivateSendButtons?.();
+    else c.activateSendButtons?.();
 }
 
 /** @param {{ worlds: object[] }} config the working copy or a saved set */
@@ -57,6 +65,10 @@ export async function runCrossover(set, topic, onStatus = () => {}) {
     assertChatOpen();
     running = true;
     cancelled = false;
+    const { eventSource, event_types } = ctx();
+    const onStop = () => cancel();
+    eventSource.on(event_types.GENERATION_STOPPED, onStop); // ST's stop button
+    busyButtons(true);
     try {
         onStatus('채팅 불러오는 중…');
         const built = await prepare(set, topic);
@@ -73,5 +85,7 @@ export async function runCrossover(set, topic, onStatus = () => {}) {
         return { text, failed: built.failed };
     } finally {
         running = false;
+        eventSource.removeListener(event_types.GENERATION_STOPPED, onStop);
+        if (!cancelled) busyButtons(false);
     }
 }
