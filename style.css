@@ -179,6 +179,7 @@ textarea.rf-input { resize: vertical; }
 /* corner buttons added to ST's own input popup (they follow the ST theme on purpose) */
 dialog.popup .rf-popup-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 1; }
 dialog.popup .rf-popup-tools .menu_button { margin: 0; }
+dialog.popup .rf-popup-chosen { margin-top: 6px; font-size: 0.85em; opacity: 0.7; text-align: left; }
 
 /* name highlights inside chat messages (only on crossover messages) */
 #chat .mes_text mark.xo-hl {

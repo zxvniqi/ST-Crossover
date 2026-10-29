@@ -240,11 +240,26 @@ export function openSettings() {
 
 /* ---------- topic prompt: ST's own input popup + two corner buttons ---------- */
 
+/** "대전쟁AU × 루시안" — alias, else the bot name. */
+function draftSummary() {
+    const worlds = getDraft().worlds.filter(w => w.file);
+    return worlds.map(w => w.label?.trim() || worldDisplayName(w)).join(' × ');
+}
+
 export async function openPrompt() {
     if (isRunning()) return toastr.info('이미 쓰는 중이에요.', EXT_NAME);
     const settings = getSettings();
     const { Popup, POPUP_TYPE } = ctx();
     const popup = new Popup('어떤 크로스오버를 볼까요?', POPUP_TYPE.INPUT, settings.lastTopic || '', { rows: 5, okButton: 'Ok', cancelButton: '취소' });
+
+    // Which chats will meet, right under the text box; refreshed after the chat picker closes.
+    const chosen = h('div.rf-popup-chosen');
+    const showChosen = () => {
+        const s = draftSummary();
+        chosen.textContent = s ? `채팅: ${s}` : '⚙ 를 눌러 크로스오버할 채팅을 골라 주세요';
+    };
+    showChosen();
+    popup.mainInput.after(chosen);
 
     const tools = h('div.rf-popup-tools', {},
         h('div.menu_button.menu_button_icon.fa-solid.fa-eraser', {
@@ -253,7 +268,7 @@ export async function openPrompt() {
         }),
         h('div.menu_button.menu_button_icon.fa-solid.fa-gear', {
             title: '크로스오버할 채팅 고르기',
-            onclick: async () => { await openSettings(); popup.mainInput.focus(); },
+            onclick: async () => { await openSettings(); showChosen(); popup.mainInput.focus(); },
         }));
     popup.dlg.append(tools);
 
