@@ -1,26 +1,32 @@
-// Main popup: pick worlds, write a topic, generate into the open chat.
+// Two windows:
+//  - openPrompt(): the QR-style topic box (with ⚙ in the corner) that starts a generation
+//  - openSettings(): pick the chats (worlds), save / load sets
 
-import { ctx, log, formatDate } from './util.js';
+import { ctx, log, formatDate, EXT_NAME } from './util.js';
 import { h, icon, searchSelect } from './dom.js';
-import { getSettings, getActiveSet, newSet, newWorld, save } from './settings.js';
+import { getSettings, getDraft, newWorld, save, saveSet, loadSet, deleteSet, MAX_WORLDS } from './settings.js';
 import { listCharacters, listGroups, listChats, clearCache, worldDisplayName } from './sources.js';
 import { listPersonas } from './persona.js';
 import { collectWorld } from './prompt.js';
 import { worldColor, hexToRgba } from './highlight.js';
 import { runCrossover, prepare, cancel, isRunning } from './runner.js';
-
+import { openModal, button, askText, confirmBox } from './modal.js';
 
 /* ---------- world card ---------- */
 
+function field(label, control, extra = null) {
+    return h('div.rf-field', {}, h('div.rf-label', {}, label, extra), control);
+}
+
 function worldCard(world, index, onRemove) {
-    const card = h('div.xo-world');
+    const card = h('div.rf-world');
     let collapsed = !!world.file; // configured worlds start folded to keep the list short
 
     const render = () => {
-        const kindToggle = h('div.xo-seg', {},
-            ...[['char', '캐릭터'], ['group', '그룹']].map(([kind, label]) => h('button.xo-seg-btn', {
+        const kindToggle = h('div.rf-seg', {},
+            ...[['char', '캐릭터'], ['group', '그룹']].map(([kind, label]) => h('button', {
                 type: 'button',
-                className: `xo-seg-btn${world.kind === kind ? ' xo-on' : ''}`,
+                className: world.kind === kind ? 'rf-on' : '',
                 onclick: () => {
                     if (world.kind === kind) return;
                     Object.assign(world, { kind, avatar: '', groupId: '', file: '', summary: 'auto', members: null });
@@ -38,30 +44,28 @@ function worldCard(world, index, onRemove) {
             placeholder: '이름으로 검색…',
             onChange: v => {
                 if (world.kind === 'group') world.groupId = v; else world.avatar = v;
-                world.file = '';
-                world.summary = 'auto';
-                world.members = null;
+                Object.assign(world, { file: '', summary: 'auto', members: null });
                 save();
                 render();
             },
         });
 
-        const chatSelect = h('select.text_pole.xo-select', { disabled: true }, h('option', {}, '먼저 캐릭터를 고르세요'));
+        const chatSelect = h('select.rf-input', { disabled: true }, h('option', {}, '먼저 캐릭터를 고르세요'));
         const personaPicker = searchSelect({
             options: [{ value: '', label: '자동 감지' }, ...listPersonas().map(p => ({ value: p.avatar, label: p.name }))],
             value: world.persona,
             placeholder: '페르소나 검색…',
             onChange: v => { world.persona = v; save(); inspect(); },
         });
-        const summarySelect = h('select.text_pole.xo-select', {
+        const summarySelect = h('select.rf-input', {
             onchange: () => { world.summary = summarySelect.value; save(); inspect(); },
         }, h('option', { value: 'auto' }, '자동'));
-        const info = h('div.xo-info');
-        const membersBox = h('div.xo-field', { hidden: true });
+        const info = h('div.rf-info');
+        const membersBox = h('div', { hidden: true });
         let membersOpen = false;
         let inspectSeq = 0;
 
-        /** Lorebook people (multi-character cards / NPCs): automatic by mentions, or picked by hand. */
+        /** Lorebook people (multi-character cards / NPCs): everyone mentioned, or picked by hand. */
         function renderMembers(candidates) {
             membersBox.hidden = !candidates.length;
             if (!candidates.length) return;
@@ -69,8 +73,8 @@ function worldCard(world, index, onRemove) {
             const picked = candidates.filter(c => c.picked);
             const setMembers = ids => { world.members = ids; save(); inspect(); };
 
-            const filter = h('input.text_pole.xo-filter', { type: 'search', placeholder: '이름 검색…' });
-            const rows = candidates.map(c => h('label.checkbox_label.xo-member', { dataset: { name: c.name.toLowerCase() } },
+            const filter = h('input.rf-input', { type: 'search', placeholder: '이름 검색…' });
+            const rows = candidates.map(c => h('label.rf-check', { dataset: { name: c.name.toLowerCase() } },
                 h('input', {
                     type: 'checkbox',
                     checked: c.picked,
@@ -81,7 +85,7 @@ function worldCard(world, index, onRemove) {
                     },
                 }),
                 h('span', {}, c.name),
-                c.score ? h('span.xo-muted', {}, `언급 ${c.score}`) : null));
+                c.score ? h('span.rf-muted', {}, `언급 ${c.score}`) : null));
             filter.addEventListener('input', () => {
                 const q = filter.value.trim().toLowerCase();
                 rows.forEach(r => { r.hidden = q && !r.dataset.name.includes(q); });
@@ -89,14 +93,13 @@ function worldCard(world, index, onRemove) {
 
             const names = picked.map(c => c.name);
             const summaryText = names.length ? `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` 외 ${names.length - 3}명` : ''}` : '없음';
-            const details = h('details.xo-members', { open: membersOpen, ontoggle: e => { membersOpen = e.target.open; } },
+            membersBox.replaceChildren(field('등장인물 (로어북)', h('details.rf-details', { open: membersOpen, ontoggle: e => { membersOpen = e.target.open; } },
                 h('summary', {}, `${auto ? '자동' : '직접 선택'} · ${summaryText}`),
-                h('label.checkbox_label', {},
+                h('label.rf-check', {},
                     h('input', { type: 'checkbox', checked: auto, onchange: e => setMembers(e.target.checked ? null : picked.map(p => p.id)) }),
                     h('span', {}, '자동 (대화·요약에 나온 인물 모두)')),
                 candidates.length > 12 ? filter : null,
-                h('div.xo-member-list', {}, ...rows));
-            membersBox.replaceChildren(h('span', {}, '등장인물 (로어북)'), details);
+                h('div.rf-list', {}, ...rows))));
         }
 
         async function inspect() {
@@ -105,13 +108,13 @@ function worldCard(world, index, onRemove) {
                 return;
             }
             info.textContent = '확인 중…';
-            info.className = 'xo-info';
+            info.classList.remove('rf-warn');
             const seq = ++inspectSeq;
             const r = await collectWorld(world, index);
             if (seq !== inspectSeq) return; // a newer check started meanwhile
             if (!r.ok) {
                 info.textContent = `⚠ ${r.error}`;
-                info.className = 'xo-info xo-warn';
+                info.classList.add('rf-warn');
                 return;
             }
             const opts = [['auto', '자동'], ['none', '사용 안 함'], ...r.candidates.map(c => [c.id, `${c.label} · ${c.size.toLocaleString()}자`])];
@@ -119,8 +122,8 @@ function worldCard(world, index, onRemove) {
             renderMembers(r.loreCandidates || []);
             info.replaceChildren(
                 h('span', {}, `메시지 ${r.messageCount.toLocaleString()}개`),
-                h('span', {}, `페르소나: ${r.persona.name} (${r.persona.via})`),
-                h('span', {}, r.summary ? `요약: ${r.summary.label}` : '요약 없음 — 최근 대화만 사용'),
+                h('span', {}, `페르소나 ${r.persona.name}`),
+                h('span', {}, r.summary ? `요약 ${r.summary.label}` : '요약 없음'),
             );
         }
 
@@ -148,38 +151,32 @@ function worldCard(world, index, onRemove) {
             }
         }
         chatSelect.addEventListener('change', () => {
-            world.file = chatSelect.value;
-            world.summary = 'auto';
+            Object.assign(world, { file: chatSelect.value, summary: 'auto' });
             save();
             inspect();
         });
 
-        const grid = h('div.xo-grid', { hidden: collapsed },
-            h('div.xo-field', {}, h('div.xo-field-head', {}, h('span', {}, world.kind === 'group' ? '그룹' : '캐릭터'), kindToggle), sourcePicker),
-            h('div.xo-field', {}, h('span', {}, '채팅'), chatSelect),
-            h('div.xo-field', {}, h('span', {}, '페르소나'), personaPicker),
-            h('div.xo-field', {}, h('span', {}, '요약'), summarySelect),
-            membersBox,
-        );
+        const body = h('div.rf-world-body', { hidden: collapsed },
+            field(world.kind === 'group' ? '그룹' : '캐릭터', sourcePicker, kindToggle),
+            field('채팅', chatSelect),
+            field('페르소나', personaPicker),
+            field('요약', summarySelect),
+            membersBox);
         const sourceName = (world.kind === 'group' ? world.groupId : world.avatar) ? worldDisplayName(world) : '';
-        const compact = h('button.xo-compact', {
-            type: 'button',
-            hidden: !collapsed,
-            title: '펼쳐서 설정 바꾸기',
-            onclick: () => toggle(false),
-        }, [sourceName, world.file].filter(Boolean).join(' · ') || '설정 안 됨');
-        const fold = h('button.xo-icon-btn', { type: 'button', title: '접기/펼치기', onclick: () => toggle(!collapsed) },
+        const compact = h('button.rf-compact', { type: 'button', hidden: !collapsed, onclick: () => toggle(false) },
+            [sourceName, world.file].filter(Boolean).join(' · ') || '아직 고르지 않았어요');
+        const fold = h('button.rf-icon', { type: 'button', title: '접기/펼치기', onclick: () => toggle(!collapsed) },
             icon(collapsed ? 'chevron-down' : 'chevron-up'));
         function toggle(value) {
             collapsed = value;
-            grid.hidden = collapsed;
+            body.hidden = collapsed;
             compact.hidden = !collapsed;
             fold.replaceChildren(icon(collapsed ? 'chevron-down' : 'chevron-up'));
         }
 
-        const paint = color => card.style.setProperty('--xo-world', hexToRgba(color, 0.55));
+        const paint = color => card.style.setProperty('--rf-world', hexToRgba(color, 0.7));
         paint(worldColor(world, index));
-        const swatch = h('label.xo-swatch', { title: '이 세계의 형광펜 색' },
+        const swatch = h('label.rf-swatch', { title: '이 채팅의 형광펜 색' },
             h('input', {
                 type: 'color',
                 value: worldColor(world, index),
@@ -188,23 +185,21 @@ function worldCard(world, index, onRemove) {
             }));
 
         card.replaceChildren(
-            h('div.xo-world-head', {},
+            h('div.rf-world-head', {},
                 swatch,
-                h('span.xo-world-num', {}, `세계 ${index + 1}`),
-                h('input.text_pole.xo-label', {
+                h('span.rf-world-num', {}, `채팅 ${index + 1}`),
+                h('input.rf-input.rf-alias', {
                     type: 'text',
                     value: world.label,
-                    placeholder: '별칭 (예: 현대AU)',
-                    title: '같은 캐릭터가 여러 세계에 나올 때 구분하는 이름',
+                    placeholder: '별칭 (선택)',
+                    title: '같은 캐릭터를 여러 번 쓸 때 AI가 구분하는 이름이에요. 본문에는 나오지 않아요.',
                     oninput: e => { world.label = e.target.value; save(); },
                 }),
                 fold,
-                h('button.xo-icon-btn', { type: 'button', title: '이 세계 빼기', onclick: onRemove }, icon('xmark')),
-            ),
+                h('button.rf-icon', { type: 'button', title: '이 채팅 빼기', onclick: onRemove }, icon('xmark'))),
             compact,
-            grid,
-            info,
-        );
+            body,
+            info);
         loadChatList();
     };
 
@@ -212,82 +207,71 @@ function worldCard(world, index, onRemove) {
     return card;
 }
 
-/* ---------- compose tab ---------- */
+/* ---------- settings window ---------- */
 
-function composePane(onDone) {
+export function openSettings() {
     const settings = getSettings();
-    const pane = h('div.xo-pane');
-    const worldsBox = h('div.xo-worlds');
-    const status = h('div.xo-status');
+    const worldsBox = h('div.rf-worlds');
+    const status = h('div.rf-status');
 
-    const setSelect = h('select.text_pole.xo-select', {
-        onchange: () => { settings.activeSetId = setSelect.value; save(); renderSet(); },
-    });
-    const fillSets = () => setSelect.replaceChildren(...settings.sets.map(s =>
-        h('option', { value: s.id, selected: s.id === settings.activeSetId }, s.name)));
+    const setSelect = h('select.rf-input', { onchange: () => {
+        if (setSelect.value) loadSet(setSelect.value);
+        else settings.activeSetId = '';
+        renderWorlds();
+    } });
+    const fillSets = () => setSelect.replaceChildren(
+        h('option', { value: '' }, settings.sets.length ? '— 저장된 세트 불러오기 —' : '저장된 세트 없음'),
+        ...settings.sets.map(s => h('option', { value: s.id, selected: s.id === settings.activeSetId }, s.name)));
 
-    const addBtn = h('button.menu_button.xo-add', { type: 'button', onclick: () => {
-        const set = getActiveSet();
-        set.worlds.push(newWorld());
+    const addBtn = button('채팅 추가', { iconName: 'plus', onclick: () => {
+        const draft = getDraft();
+        if (draft.worlds.length >= MAX_WORLDS) return;
+        draft.worlds.push(newWorld());
         save();
-        renderSet();
-    } }, icon('plus'), ' 세계 추가');
+        renderWorlds();
+    } });
 
-    function renderSet() {
-        const set = getActiveSet();
-        worldsBox.replaceChildren(...set.worlds.map((w, i) => worldCard(w, i, () => {
-            set.worlds.splice(i, 1);
+    function renderWorlds() {
+        const draft = getDraft();
+        worldsBox.replaceChildren(...draft.worlds.map((w, i) => worldCard(w, i, () => {
+            draft.worlds.splice(i, 1);
             save();
-            renderSet();
+            renderWorlds();
         })));
-    }
-
-    async function setAction(kind) {
-        const { Popup } = ctx();
-        const set = getActiveSet();
-        if (kind === 'new') {
-            const name = await Popup.show.input('새 세트', '세트 이름', `세트 ${settings.sets.length + 1}`);
-            if (!name) return;
-            const created = newSet(String(name).trim());
-            settings.sets.push(created);
-            settings.activeSetId = created.id;
-        } else if (kind === 'rename') {
-            const name = await Popup.show.input('세트 이름 바꾸기', '새 이름', set.name);
-            if (!name) return;
-            set.name = String(name).trim() || set.name;
-        } else if (kind === 'delete') {
-            if (settings.sets.length <= 1) return toastr.info('세트가 하나뿐이라 지울 수 없어요.');
-            if (!await Popup.show.confirm('세트 삭제', `"${set.name}" 세트를 지울까요? 채팅에 넣은 에피소드는 남아요.`)) return;
-            settings.sets = settings.sets.filter(s => s.id !== set.id);
-            settings.activeSetId = settings.sets[0].id;
-        }
-        save();
+        addBtn.disabled = draft.worlds.length >= MAX_WORLDS;
+        addBtn.title = addBtn.disabled ? `최대 ${MAX_WORLDS}개까지예요` : '';
         fillSets();
-        renderSet();
     }
 
-    const topic = h('textarea.text_pole.xo-topic', {
-        rows: 3,
-        placeholder: '보고 싶은 내용 (예: 두 세계의 {{user}}가 같은 카페에서 마주친다)',
-        value: settings.lastTopic,
-        oninput: e => { settings.lastTopic = e.target.value; save(); },
-    });
-
-    const genBtn = h('button.menu_button.xo-primary', { type: 'button', onclick: generate }, icon('wand-magic-sparkles'), ' 생성');
-    const stopBtn = h('button.menu_button', { type: 'button', hidden: true, onclick: () => { cancel(); status.textContent = '중지했어요.'; } }, icon('stop'), ' 중지');
-    const previewBtn = h('button.menu_button', { type: 'button', onclick: preview, title: '모델에게 보낼 내용을 확인' }, icon('eye'), ' 미리보기');
-    const refreshBtn = h('button.menu_button', { type: 'button', title: '채팅을 다시 읽어오기', onclick: () => { clearCache(); renderSet(); } }, icon('rotate'));
-
-    const setBusy = busy => {
-        genBtn.disabled = busy;
-        previewBtn.disabled = busy;
-        stopBtn.hidden = !busy;
-    };
+    async function onSave() {
+        const active = settings.sets.find(s => s.id === settings.activeSetId);
+        if (active) {
+            saveSet();
+            toastr.success(`"${active.name}"에 저장했어요.`);
+        } else {
+            await onSaveAs();
+        }
+        fillSets();
+    }
+    async function onSaveAs() {
+        const name = await askText('세트 이름', `세트 ${settings.sets.length + 1}`);
+        if (!name) return;
+        saveSet(name);
+        toastr.success(`"${name}"(으)로 저장했어요.`);
+        fillSets();
+    }
+    async function onDelete() {
+        const active = settings.sets.find(s => s.id === settings.activeSetId);
+        if (!active) return toastr.info('지울 세트를 먼저 불러오세요.');
+        if (!await confirmBox('세트 삭제', `"${active.name}" 세트를 지울까요? 지금 고른 채팅은 그대로 남아요.`)) return;
+        deleteSet(active.id);
+        fillSets();
+    }
 
     async function preview() {
         try {
             status.textContent = '불러오는 중…';
-            const built = await prepare(getActiveSet(), topic.value);
+            const built = await prepare(getDraft(), getSettings().lastTopic || '');
             const { prompt, systemPrompt } = built.request;
             const full = Array.isArray(prompt)
                 ? prompt.map(m => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n')
@@ -295,68 +279,99 @@ function composePane(onDone) {
             let tokens = '';
             try { tokens = ` · 약 ${(await ctx().getTokenCountAsync(full)).toLocaleString()} 토큰`; } catch { /* optional */ }
             status.textContent = '';
-            const warn = built.failed.length ? `⚠ 건너뛴 세계: ${built.failed.map(f => f.label).join(', ')}\n\n` : '';
-            const box = h('div.xo-root.xo-preview', {},
-                h('h3', {}, '프롬프트 미리보기'),
-                h('div.xo-muted', {}, `${full.length.toLocaleString()}자${tokens}`),
-                h('textarea.text_pole', { readOnly: true, value: warn + full }));
-            const { Popup, POPUP_TYPE } = ctx();
-            await new Popup(box, POPUP_TYPE.TEXT, '', { wide: true, large: true, okButton: '닫기' }).show();
+            const warn = built.failed.length ? `⚠ 건너뛴 채팅: ${built.failed.map(f => f.label).join(', ')}\n\n` : '';
+            openModal({
+                title: '보낼 프롬프트',
+                width: '880px',
+                body: h('div.rf-stack', {},
+                    h('div.rf-muted', {}, `${full.length.toLocaleString()}자${tokens}`),
+                    h('textarea.rf-input.rf-mono', { readOnly: true, value: warn + full })),
+            });
         } catch (err) {
             status.textContent = `⚠ ${err.message}`;
         }
     }
 
-    async function generate() {
-        if (isRunning()) return;
-        setBusy(true);
-        try {
-            const result = await runCrossover(getActiveSet(), topic.value, s => { status.textContent = s; });
-            if (!result) return;
-            if (result.failed.length) toastr.warning(`건너뛴 세계: ${result.failed.map(f => f.label).join(', ')}`);
-            toastr.success('채팅에 숨김 메시지로 넣었어요.');
-            onDone(); // close the popup so the new message is in view
-        } catch (err) {
-            log.error('generation failed', err);
-            status.textContent = `⚠ ${err.message}`;
-        } finally {
-            setBusy(false);
-        }
-    }
+    renderWorlds();
 
-    fillSets();
-    renderSet();
-
-    pane.append(
-        h('div.xo-row.xo-set-row', {},
-            h('span.xo-muted', {}, '세트'),
+    const body = h('div.rf-stack', {},
+        h('div.rf-row', {},
             setSelect,
-            h('button.xo-icon-btn', { type: 'button', title: '새 세트', onclick: () => setAction('new') }, icon('plus')),
-            h('button.xo-icon-btn', { type: 'button', title: '이름 바꾸기', onclick: () => setAction('rename') }, icon('pen')),
-            h('button.xo-icon-btn', { type: 'button', title: '삭제', onclick: () => setAction('delete') }, icon('trash-can')),
-        ),
+            button('저장', { primary: true, iconName: 'floppy-disk', onclick: onSave }),
+            button('', { iconName: 'copy', title: '새 이름으로 저장', onclick: onSaveAs }),
+            button('', { iconName: 'trash-can', title: '불러온 세트 삭제', onclick: onDelete })),
         worldsBox,
         addBtn,
-        h('div.xo-field', {}, h('span', {}, '주제 / 보고 싶은 장면'), topic),
-        h('div.xo-muted', {}, '언어·분량·문체는 지금 쓰는 프리셋을 따라요. 결과는 열린 채팅에 숨김 메시지로 들어가고, AI 맥락에는 들어가지 않아요.'),
-        h('div.xo-row.xo-actions', {}, refreshBtn, previewBtn, stopBtn, genBtn),
-        status,
-    );
-    return pane;
+        status);
+
+    return openModal({
+        title: `${EXT_NAME} 설정 — 크로스오버할 채팅`,
+        width: '760px',
+        body,
+        actions: [
+            button('새로고침', { iconName: 'rotate', title: '채팅을 다시 읽어와요', onclick: () => { clearCache(); renderWorlds(); } }),
+            button('미리보기', { iconName: 'eye', title: '모델에게 보낼 내용을 확인해요', onclick: preview }),
+        ],
+    }).done;
 }
 
+/* ---------- topic prompt (QR) ---------- */
 
-/* ---------- popup ---------- */
+function draftSummary() {
+    const worlds = getDraft().worlds.filter(w => w.file);
+    return worlds.length ? worlds.map((w, i) => w.label || `${worldDisplayName(w)}${worlds.length > 1 ? ` ${i + 1}` : ''}`).join(' × ') : '';
+}
 
-export async function openCrossover() {
-    const { Popup, POPUP_TYPE } = ctx();
-    let popup = null;
-    const close = () => {
-        if (typeof popup?.completeAffirmative === 'function') popup.completeAffirmative();
-        else root.closest('dialog')?.querySelector('.popup-button-ok')?.click();
+export function openPrompt() {
+    const settings = getSettings();
+    const topic = h('textarea.rf-input.rf-topic', {
+        rows: 5,
+        placeholder: '보고 싶은 장면을 자유롭게 적어 주세요',
+        value: settings.lastTopic,
+        oninput: e => { settings.lastTopic = e.target.value; save(); },
+    });
+    const worldsLine = h('div.rf-muted');
+    const refreshLine = () => {
+        const s = draftSummary();
+        worldsLine.textContent = s ? `채팅: ${s}` : '⚙ 를 눌러 크로스오버할 채팅을 먼저 골라 주세요';
     };
-    const root = h('div.xo-root', {}, composePane(close));
-    popup = new Popup(root, POPUP_TYPE.TEXT, '', { wide: true, large: true, okButton: '닫기', allowVerticalScrolling: true });
-    await popup.show();
-    if (isRunning()) toastr.info('창을 닫아도 생성은 계속돼요. 끝나면 지금 열린 채팅에 들어가요.');
+    refreshLine();
+
+    const gear = h('button.rf-icon', {
+        type: 'button',
+        title: '채팅 고르기',
+        onclick: async () => {
+            await openSettings();
+            refreshLine();
+        },
+    }, icon('gear'));
+
+    const go = async () => {
+        if (isRunning()) return;
+        m.close(true);
+        const handle = ctx().loader?.show?.({ blocking: false, message: `${EXT_NAME}: 크로스오버 쓰는 중…`, toastMode: 'stoppable', onStop: cancel });
+        try {
+            const result = await runCrossover(getDraft(), topic.value);
+            if (!result) return;
+            if (result.failed.length) toastr.warning(`건너뛴 채팅: ${result.failed.map(f => f.label).join(', ')}`);
+        } catch (err) {
+            log.error('generation failed', err);
+            toastr.error(err.message, EXT_NAME);
+        } finally {
+            await handle?.hide?.();
+        }
+    };
+
+    const m = openModal({
+        title: '어떤 크로스오버를 볼까요?',
+        headerExtra: gear,
+        width: '520px',
+        body: h('div.rf-stack', {}, topic, worldsLine),
+        actions: [
+            button('취소', { onclick: () => m.close(null) }),
+            button('Ok', { primary: true, onclick: go }),
+        ],
+    });
+    topic.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) go(); });
+    setTimeout(() => topic.focus(), 0);
 }

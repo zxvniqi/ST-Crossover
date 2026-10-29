@@ -3,7 +3,8 @@
 import { ctx, log } from './util.js';
 import { collectWorld, buildPrompt, NAME_MAP_MARKER } from './prompt.js';
 import { assemble } from './preset.js';
-import { buildMarks, splitNameMap } from './highlight.js';
+import { parseEpisode } from './highlight.js';
+import { MAX_WORLDS } from './settings.js';
 import { assertChatOpen, insertIntoChat } from './chat-insert.js';
 
 let running = false;
@@ -24,8 +25,9 @@ export function cancel() {
     }
 }
 
-function usableWorlds(set) {
-    return (set?.worlds || []).filter(w => w.file && (w.kind === 'group' ? w.groupId : w.avatar));
+/** @param {{ worlds: object[] }} config the working copy or a saved set */
+function usableWorlds(config) {
+    return (config?.worlds || []).slice(0, MAX_WORLDS).filter(w => w.file && (w.kind === 'group' ? w.groupId : w.avatar));
 }
 
 /**
@@ -63,16 +65,11 @@ export async function runCrossover(set, topic, onStatus = () => {}) {
         onStatus('에피소드 쓰는 중…');
         const raw = String(await ctx().generateRaw(built.request) ?? '');
         if (cancelled) return null;
-        const { text, spellings } = splitNameMap(raw, NAME_MAP_MARKER);
+        const { text, hl } = parseEpisode(raw, built.worlds, NAME_MAP_MARKER);
         if (!text) throw new Error('모델이 빈 응답을 보냈어요. API 연결과 응답 길이 설정을 확인해 주세요.');
-        log.debug('name map', Object.fromEntries(spellings));
+        log.debug('highlight names', hl.names);
 
-        await insertIntoChat({
-            text,
-            topic,
-            worlds: built.worlds.map(w => w.label),
-            marks: buildMarks(built.worlds, spellings),
-        });
+        await insertIntoChat({ text, topic, hl });
         return { text, failed: built.failed };
     } finally {
         running = false;

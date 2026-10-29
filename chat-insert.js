@@ -1,8 +1,8 @@
 // Puts an episode into the open chat as a hidden message: it renders like any message
 // (translators, theme, regex all apply) but is left out of the prompt, so canon stays clean.
 
-import { ctx, log } from './util.js';
-import { applyHighlights } from './highlight.js';
+import { ctx, log, EXT_NAME } from './util.js';
+import { applyHighlights, normalizeHl } from './highlight.js';
 
 const EXTRA_KEY = 'crossover_episode';
 
@@ -17,20 +17,20 @@ export function assertChatOpen() {
 }
 
 /**
- * @param {{ text: string, marks: object[], topic: string, worlds: string[] }} episode
+ * @param {{ text: string, hl: object, topic: string }} episode hl = highlight data from parseEpisode
  * @returns {Promise<number>} index of the new message
  */
 export async function insertIntoChat(episode) {
     assertChatOpen();
     const c = ctx();
     const message = {
-        name: c.name2 || 'Crossover',
+        name: c.name2 || EXT_NAME,
         is_user: false,
         is_system: true, // hidden: shown in the chat, never sent to the model
         send_date: typeof c.humanizedDateTime === 'function' ? c.humanizedDateTime() : new Date().toISOString(),
         mes: episode.text,
         extra: {
-            [EXTRA_KEY]: { topic: episode.topic, worlds: episode.worlds, marks: episode.marks },
+            [EXTRA_KEY]: { topic: episode.topic, hl: episode.hl },
         },
     };
     c.chat.push(message);
@@ -73,12 +73,12 @@ export function highlightChat() {
     pending = requestAnimationFrame(() => {
         const chat = ctx().chat || [];
         chat.forEach((m, i) => {
-            const marks = m?.extra?.[EXTRA_KEY]?.marks;
-            if (!marks?.length) return;
+            const hl = normalizeHl(m?.extra?.[EXTRA_KEY]);
+            if (!hl) return;
             const body = document.querySelector(`#chat .mes[mesid="${i}"] .mes_text`);
             if (!body) return;
             try {
-                applyHighlights(body, marks);
+                applyHighlights(body, hl);
             } catch (err) {
                 log.debug('highlight failed', i, err);
             }

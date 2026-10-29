@@ -10,16 +10,16 @@ import { worldColor } from './highlight.js';
 /** The model appends a name map after this line; it is parsed for highlights and removed from the episode. */
 export const NAME_MAP_MARKER = '[[NAMES]]';
 
-// Per-item caps (characters) so one huge card or summary cannot crowd out the others.
-// No caps on how many worlds or people take part.
+// Per-item caps (characters) so one huge card or summary cannot crowd out the others,
+// kept modest because the user's whole preset is sent along. No cap on how many people take part.
 const LIMIT = Object.freeze({
-    card: 3000,
-    member: 2000,
-    settingEntry: 1500,
-    persona: 1500,
-    summary: 4000,
-    recentChars: 6000,
-    recentMessages: 20,
+    card: 2000,
+    member: 1200,
+    settingEntry: 800,
+    persona: 1000,
+    summary: 3000,
+    recentChars: 3500,
+    recentMessages: 12,
 });
 
 const LOCALE_LANGUAGE = { ko: 'Korean', ja: 'Japanese', zh: 'Chinese', en: 'English', ru: 'Russian', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese', vi: 'Vietnamese', th: 'Thai', id: 'Indonesian' };
@@ -184,31 +184,34 @@ export function buildPrompt(collected, topic) {
     const sameNote = shared.length
         ? `Some people exist in more than one world (${shared.map(s => `"${s}"`).join(', ')}). `
           + 'Each world\'s version is a different person with their own history, relationships and memories. '
-          + 'Never merge them, and let their differences show. When both versions share a scene, make it clear which one acts or speaks '
-          + '(for example with a short world tag written in the output language). They may react to meeting another version of themselves.'
+          + 'Never merge them, and let their differences show through actions and speech. They may react to meeting another version of themselves.'
         : '';
-    const labels = worlds.flatMap(w => [...w.cast.filter(c => !c.isSetting).map(c => c.alias), w.persona.alias]);
     const reader = readerLanguage();
+    const n = worlds.length;
 
     const system = [
         '[Crossover episode] Instead of continuing a chat, write one standalone crossover episode.',
-        `The characters below come from ${worlds.length} separate stories ("worlds"). For this episode they meet in one shared scene.`,
+        `The characters below come from ${n} separate stories ("worlds"). For this episode they meet in one shared scene.`,
         sameNote,
         'Keep every character true to their own world: personality, speech style, relationships and what they know.',
         'Characters only know what happened in their own world unless the episode shows them learning it.',
         'The user\'s characters are written as full characters in the story, consistent with their logs.',
         'This is a side story. Do not continue or change any world\'s canon, and do not resolve its open plotlines.',
-        'Names below are labels, possibly in another language. In the prose, write every name the way it is naturally written in the language you write in.',
+        'Headings below are labels for you, possibly in another language. In the prose, write every name the way it is naturally written in the language you write in.',
+        'Never write world names, labels or tags in brackets next to a name, and do not use 「」 brackets.',
     ].filter(Boolean).join('\n');
 
     const request = [
         '=== EPISODE REQUEST ===',
         `What the user wants to see: ${topic.trim() || 'Surprise the reader with a fun, natural reason for these worlds to meet.'}`,
         'Write the episode now: an optional short title on the first line, then the prose.',
-        `After the episode, add a line "${NAME_MAP_MARKER}" and then one line per person who appears: "<label> = <every spelling you used for them, comma-separated>`
-            + (reader ? `, <how the name is usually written in ${reader}, with the same world tag if you used one>` : '') + '". '
-            + `Labels: ${labels.map(l => `"${l}"`).join(', ')}.`,
-    ].join('\n');
+        `Name tags: every time you write the name of a person (a character from World 1 to World ${n}), wrap that name in <wN></wN>, `
+            + 'where N is the number of the world the person comes from, e.g. <w1>Name</w1>. '
+            + 'Tag only names of people; never tag places, titles, species, items or other words. The tags are hidden from the reader.',
+        reader
+            ? `After the episode, add a line "${NAME_MAP_MARKER}" and then one line per tagged person: "wN: <name as you wrote it> = <how that name is usually written in ${reader}>".`
+            : '',
+    ].filter(Boolean).join('\n');
 
     const material = worlds.map((w, i) => worldBlock(w, i + 1)).join('\n\n');
     return { parts: { system, material, request }, worlds, failed };

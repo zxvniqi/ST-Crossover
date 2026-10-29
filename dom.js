@@ -1,7 +1,7 @@
 // Tiny DOM helpers so UI code stays declarative without a framework.
 
 /**
- * h('button.xo-btn', { onclick, title }, 'Text', child)
+ * h('button.rf-btn', { onclick, title }, 'Text', child)
  * Tag string supports ".class" suffixes. Props starting with "on" become listeners.
  */
 export function h(tag, props = {}, ...children) {
@@ -12,7 +12,7 @@ export function h(tag, props = {}, ...children) {
         if (value == null || value === false) continue;
         if (key.startsWith('on') && typeof value === 'function') el.addEventListener(key.slice(2), value);
         else if (key === 'dataset') Object.assign(el.dataset, value);
-        else if (key in el && key !== 'list') el[key] = value;
+        else if (key in el && key !== 'list' && key !== 'style') el[key] = value;
         else el.setAttribute(key, value === true ? '' : value);
     }
     for (const child of children.flat()) {
@@ -31,8 +31,8 @@ export function icon(name) {
  * @param {{ options: {value: string, label: string}[], value: string, placeholder?: string, onChange: (v: string) => void }} cfg
  */
 export function searchSelect({ options, value, placeholder = '검색…', onChange }) {
-    const select = h('select.text_pole.xo-select');
-    const filter = h('input.text_pole.xo-filter', { type: 'search', placeholder });
+    const select = h('select.rf-input');
+    const filter = h('input.rf-input.rf-filter', { type: 'search', placeholder });
 
     const fill = () => {
         const q = filter.value.trim().toLowerCase();
@@ -48,5 +48,5 @@ export function searchSelect({ options, value, placeholder = '검색…', onChan
     fill();
 
     // Hide the filter when the list is short.
-    return h('div.xo-search-select', {}, options.length > 12 ? filter : null, select);
+    return h('div.rf-stack', {}, options.length > 12 ? filter : null, select);
 }
