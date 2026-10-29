@@ -17,20 +17,43 @@ export function hexToRgba(hex, alpha) {
 }
 
 /**
- * One mark per world with every person of that world. Built after aliases are assigned,
- * so a name shared by two worlds is only marked through its world-tagged alias.
- * @param {object[]} worlds collected worlds (buildPrompt output)
+ * Split the model's name map off the episode.
+ * @param {string} raw model output
+ * @param {string} marker line that starts the map
+ * @returns {{ text: string, spellings: Map<string, string[]> }} label → spellings used in the text
+ */
+export function splitNameMap(raw, marker) {
+    const at = raw.lastIndexOf(marker);
+    if (at < 0) return { text: raw.trim(), spellings: new Map() };
+    const spellings = new Map();
+    for (const line of raw.slice(at + marker.length).split('\n')) {
+        const eq = line.indexOf('=');
+        if (eq < 0) continue;
+        const label = line.slice(0, eq).replace(/^[\s\-*"“]+|[\s"”]+$/g, '');
+        const names = line.slice(eq + 1).split(/[,，、]/).map(s => s.replace(/^[\s"“「]+|[\s"”」]+$/g, '')).filter(Boolean);
+        if (label && names.length) spellings.set(label, names);
+    }
+    return { text: raw.slice(0, at).trim(), spellings };
+}
+
+/**
+ * One mark per world with every person of that world, using the spellings the model reported
+ * (labels as a fallback). A spelling claimed by two worlds is ambiguous and left unmarked.
+ * @param {object[]} worlds collected worlds (buildPrompt output, aliases assigned)
+ * @param {Map<string, string[]>} [spellings]
  * @returns {{ world: string, color: string, names: string[] }[]}
  */
-export function buildMarks(worlds) {
-    return worlds.map(w => ({
-        world: w.label,
-        color: w.color,
-        names: [...new Set([
-            ...w.cast.filter(c => !c.isSetting).map(c => c.alias),
-            w.persona.alias,
-        ])].filter(n => n && n.length >= MIN_NAME_LENGTH),
-    })).filter(m => m.names.length);
+export function buildMarks(worlds, spellings = new Map()) {
+    const marks = worlds.map(w => {
+        const labels = [...w.cast.filter(c => !c.isSetting).map(c => c.alias), w.persona.alias];
+        const names = labels.flatMap(l => [l, ...(spellings.get(l) || [])]);
+        return { world: w.label, color: w.color, names: [...new Set(names)].filter(n => n && n.length >= MIN_NAME_LENGTH) };
+    });
+    const owners = new Map();
+    marks.forEach((m, i) => m.names.forEach(n => owners.set(n, owners.has(n) && owners.get(n) !== i ? -1 : i)));
+    return marks
+        .map((m, i) => ({ ...m, names: m.names.filter(n => owners.get(n) === i) }))
+        .filter(m => m.names.length);
 }
 
 function escapeRegex(s) {
@@ -55,11 +78,12 @@ export function applyHighlights(root, marks = []) {
 
     for (const node of nodes) {
         const text = node.nodeValue;
-        pattern.lastIndex = 0;
-        if (!pattern.test(text)) continue;
+        // matchAll only; a prior test() would advance lastIndex and skip the first name.
+        const matches = [...text.matchAll(pattern)];
+        if (!matches.length) continue;
         const parts = [];
         let last = 0;
-        for (const match of text.matchAll(pattern)) {
+        for (const match of matches) {
             if (match.index > last) parts.push(text.slice(last, match.index));
             const m = byName.get(match[0]);
             parts.push(h('mark.xo-hl', { title: m.world, style: `--xo-hl: ${hexToRgba(m.color, 0.55)}` }, match[0]));

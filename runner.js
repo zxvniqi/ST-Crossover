@@ -1,8 +1,8 @@
 // Generation pipeline shared by the popup and the slash command.
 
 import { ctx, log, MAX_WORLDS } from './util.js';
-import { collectWorld, buildPrompt } from './prompt.js';
-import { buildMarks } from './highlight.js';
+import { collectWorld, buildPrompt, NAME_MAP_MARKER } from './prompt.js';
+import { buildMarks, splitNameMap } from './highlight.js';
 import { assertChatOpen, insertIntoChat } from './chat-insert.js';
 
 let running = false;
@@ -56,15 +56,17 @@ export async function runCrossover(set, topic, options, onStatus = () => {}) {
 
         onStatus('에피소드 쓰는 중…');
         log.debug('prompt chars', built.systemPrompt.length + built.prompt.length);
-        const text = String(await ctx().generateRaw({ systemPrompt: built.systemPrompt, prompt: built.prompt }) ?? '').trim();
+        const raw = String(await ctx().generateRaw({ systemPrompt: built.systemPrompt, prompt: built.prompt }) ?? '');
         if (cancelled) return null;
+        const { text, spellings } = splitNameMap(raw, NAME_MAP_MARKER);
         if (!text) throw new Error('모델이 빈 응답을 보냈어요. API 연결과 응답 길이 설정을 확인해 주세요.');
+        log.debug('name map', Object.fromEntries(spellings));
 
         await insertIntoChat({
             text,
             topic,
             worlds: built.worlds.map(w => w.label),
-            marks: buildMarks(built.worlds),
+            marks: buildMarks(built.worlds, spellings),
         });
         return { text, failed: built.failed };
     } finally {

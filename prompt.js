@@ -7,6 +7,9 @@ import { findSummaries, pickSummary } from './summaries.js';
 import { collectLore } from './lore.js';
 import { worldColor } from './highlight.js';
 
+/** The model appends a name map after this line; it is parsed for highlights and removed from the episode. */
+export const NAME_MAP_MARKER = '[[NAMES]]';
+
 const LENGTH_HINT = {
     short: 'about 600 words',
     medium: 'about 1,200 words',
@@ -172,9 +175,10 @@ export function buildPrompt(collected, topic, options) {
     const sameNote = shared.length
         ? `Some people exist in more than one world (${shared.map(s => `"${s}"`).join(', ')}). `
           + 'Each world\'s version is a different person with their own history, relationships and memories. '
-          + 'Always refer to them by the world-tagged names given below, never merge them, and let their differences show. '
-          + 'They may react to meeting another version of themselves.'
+          + 'Never merge them, and let their differences show. When both versions share a scene, make it clear which one acts or speaks '
+          + '(for example with a short world tag written in the output language). They may react to meeting another version of themselves.'
         : '';
+    const labels = worlds.flatMap(w => [...w.cast.filter(c => !c.isSetting).map(c => c.alias), w.persona.alias]);
 
     const systemPrompt = [
         'You are a skilled fiction writer creating a standalone crossover episode.',
@@ -186,7 +190,10 @@ export function buildPrompt(collected, topic, options) {
         'This is a side story. Do not continue or change any world\'s canon, and do not resolve its open plotlines.',
         `Write in ${options.language || 'Korean'}. Length: ${LENGTH_HINT[options.length] || LENGTH_HINT.medium}.`,
         'Match the formatting style of the chat logs (for example *narration* in asterisks or "dialogue" in quotes, if the logs use them).',
-        'Output only the episode text: an optional short title on the first line, then the prose. No notes or explanations.',
+        'Names below are labels, possibly in another language. In the prose, write every name the way it is naturally written in the output language.',
+        'Output the episode text: an optional short title on the first line, then the prose. No notes or explanations.',
+        `After the episode, add a line "${NAME_MAP_MARKER}" and then one line per person who appears: "<label> = <every spelling you used for them, comma-separated>". `
+            + `Labels: ${labels.map(l => `"${l}"`).join(', ')}.`,
     ].filter(Boolean).join('\n');
 
     const request = [
