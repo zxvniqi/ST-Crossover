@@ -1,12 +1,12 @@
 // Crossover Episodes — writes a side story where characters from several chats meet.
 // Entry point: wires the wand-menu button, settings drawer and /crossover command.
 
-import { ctx, log, setDebug } from './src/util.js';
-import { getSettings, save } from './src/settings.js';
-import { h, icon } from './src/dom.js';
-import { openCrossover } from './src/ui.js';
-import { runCrossover } from './src/runner.js';
-import { clearCache } from './src/sources.js';
+import { ctx, log, setDebug } from './util.js';
+import { getSettings, save } from './settings.js';
+import { h, icon } from './dom.js';
+import { openCrossover } from './ui.js';
+import { runCrossover } from './runner.js';
+import { clearCache } from './sources.js';
 
 const WAND_ID = 'xo_wand_button';
 const DRAWER_ID = 'xo_settings_drawer';

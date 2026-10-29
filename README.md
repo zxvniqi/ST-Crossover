@@ -63,19 +63,21 @@ ST → 확장(퍼즐 아이콘) → **Install extension** → 이 저장소의 G
 ## 코드 구조
 
 ```
-index.js            진입점 (마법봉 버튼, 설정 패널, /crossover)
-src/sources.js      캐릭터·그룹·채팅 파일·로어북 읽기 (캐시)
-src/persona.js      채팅별 페르소나 판별
-src/summaries.js    요약 확장 어댑터 — 새 요약 확장 지원은 여기에 어댑터 하나만 추가
-src/lore.js         다인봇 로어북 인물 선택
-src/prompt.js       세계별 데이터 수집 + 프롬프트 조립 (모델이 읽는 문장은 영어)
-src/runner.js       생성 흐름 (UI와 슬래시 명령이 함께 씀)
-src/colors.js       아바타 대표색 추출
-src/highlight.js    형광펜 표시와 범례
-src/reading.js      테마 맞춤 읽기 화면 (messageFormatting + .mes_text 규칙 미러링)
-src/episode-view.js 결과·보관함 공통 보기
-src/ui.js           팝업 (새 에피소드 / 보관함)
-src/archive.js      보관함 저장소
+index.js         진입점 (마법봉 버튼, 설정 패널, /crossover)
+sources.js       캐릭터·그룹·채팅 파일·로어북 읽기 (캐시)
+persona.js       채팅별 페르소나 판별
+summaries.js     요약 확장 어댑터 — 새 요약 확장 지원은 여기에 어댑터 하나만 추가
+lore.js          다인봇 로어북 인물 선택
+prompt.js        세계별 데이터 수집 + 프롬프트 조립 (모델이 읽는 문장은 영어)
+runner.js        생성 흐름 (UI와 슬래시 명령이 함께 씀)
+colors.js        아바타 대표색 추출
+highlight.js     형광펜 표시와 범례
+reading.js       테마 맞춤 읽기 화면 (messageFormatting + .mes_text 규칙 미러링)
+episode-view.js  결과·보관함 공통 보기
+ui.js            팝업 (새 에피소드 / 보관함)
+archive.js       보관함 저장소
+settings.js      설정·세트 저장
+dom.js, util.js  공용 도우미
 ```
 
 ## 보안
