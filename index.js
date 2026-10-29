@@ -1,4 +1,4 @@
-// Rift — writes a crossover side story where characters from several chats meet.
+// 크로스오버 — writes a crossover side story where characters from several chats meet.
 // Entry point: QR-bar button, wand-menu item, settings drawer and /crossover command.
 
 import { ctx, log, setDebug, EXT_NAME } from './util.js';

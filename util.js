@@ -1,7 +1,7 @@
 // Small shared helpers. No ST state is cached here.
 
 export const MODULE_NAME = 'crossover_episodes'; // storage key; keep stable across renames
-export const EXT_NAME = 'Rift';                   // shown in the UI
+export const EXT_NAME = '크로스오버';             // shown in the UI
 
 let debugEnabled = false;
 

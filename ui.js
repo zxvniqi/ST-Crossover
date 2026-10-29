@@ -305,7 +305,7 @@ export function openSettings() {
         status);
 
     return openModal({
-        title: `${EXT_NAME} 설정 — 크로스오버할 채팅`,
+        title: `${EXT_NAME} 설정 — 채팅 고르기`,
         width: '760px',
         body,
         actions: [
@@ -349,7 +349,7 @@ export function openPrompt() {
     const go = async () => {
         if (isRunning()) return;
         m.close(true);
-        const handle = ctx().loader?.show?.({ blocking: false, message: `${EXT_NAME}: 크로스오버 쓰는 중…`, toastMode: 'stoppable', onStop: cancel });
+        const handle = ctx().loader?.show?.({ blocking: false, message: `${EXT_NAME} 쓰는 중…`, toastMode: 'stoppable', onStop: cancel });
         try {
             const result = await runCrossover(getDraft(), topic.value);
             if (!result) return;

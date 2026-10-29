@@ -1,5 +1,5 @@
 {
-    "display_name": "Rift",
+    "display_name": "크로스오버",
     "loading_order": 100,
     "dependencies": [],
     "js": "index.js",

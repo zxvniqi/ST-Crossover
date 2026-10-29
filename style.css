@@ -1,4 +1,4 @@
-/* Rift — self-styled windows (independent of the ST theme). Every rule is scoped under .rf-overlay,
+/* 크로스오버 — self-styled windows (independent of the ST theme). Every rule is scoped under .rf-overlay,
    except the name highlight, which lives inside chat messages and keeps the theme's text colour. */
 
 .rf-overlay {
@@ -146,7 +146,7 @@ textarea.rf-input { resize: vertical; }
     .rf-actions { padding: 10px 14px 14px; }
 }
 
-/* name highlights inside chat messages (only on Rift messages) */
+/* name highlights inside chat messages (only on crossover messages) */
 #chat .mes_text mark.xo-hl {
     color: inherit;
     background: linear-gradient(transparent 50%, var(--xo-hl) 50%, var(--xo-hl) 92%, transparent 92%);
